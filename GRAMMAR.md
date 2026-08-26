@@ -87,6 +87,32 @@ evaluated arrived as JSON, and a JSON array is a value that exists — testing
 whether it is *empty* is what `.length` is for, and conflating the two is how a
 "did we get results?" check silently becomes "did the call succeed?".
 
+
+### `.length`
+
+The one pseudo-property this grammar provides. `.length` on an **array** or a
+**string** yields a count; on anything else it is `null`.
+
+It is load-bearing rather than convenient, and the truthiness rule above is why:
+`[]` is truthy, so without `.length` a consumer would have **no way to ask
+whether a collection is empty** — the grammar would say "an array that exists is
+a value" and then leave them unable to test the thing they actually care about.
+
+```
+{{ results.length === 0 ? 'nothing found' : 'ok' }}
+```
+
+It is not host reach: nothing is called and no prototype is walked, a count is
+computed. Objects deliberately have **no** `.length` — there is no answer three
+languages would agree on, and an object used as a collection is rare enough not
+to justify inventing one.
+
+**This section exists because writing the discrimination tests found the spec
+contradicting the implementation.** The truthiness rule was justified with
+`.length` while `.length` returned `null` — prose promising something the code
+did not do, in a package written the same hour. Recorded rather than quietly
+fixed, because it is the exact failure this whole corpus argues against.
+
 ### Equality
 
 `==` and `===` are the SAME operator, and so are `!=` and `!==`. Both spellings
