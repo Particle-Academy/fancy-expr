@@ -63,20 +63,61 @@ is what `.length` is for, and conflating the two turns "did we get results?" int
 equality operators that differ subtly is a language that generates bug reports,
 and there are three runtimes to keep in step.
 
+## Layout
+
+One repo, three languages, mirroring `fancy-conformance`:
+
+```
+GRAMMAR.md         the specification -- read it first
+src/               TypeScript
+tests/
+php/src/           PHP
+php/tests/
+composer.json      AT THE ROOT, psr-4 -> php/src/
+phpunit.xml        AT THE ROOT, testsuite -> php/tests
+```
+
+**`composer.json` belongs at the repository root and nowhere else.** Packagist
+reads only the root manifest; one inside `php/` is invisible to it, so the
+package would be unpublishable while looking perfectly organised in the tree.
+This repo had it in `php/` for exactly one afternoon.
+
 ## Testing
+
+```bash
+npm test                      # TypeScript: table + discrimination probes
+php vendor/bin/pest           # PHP: the same table, plus PHP-specific probes
+```
 
 Every semantic rule in `GRAMMAR.md` is a row in the shared corpus, and each
 implementation runs the same rows. Add the row FIRST, then satisfy it in all
 three — the spec-first order, which repeatedly caught real defects in the flow
 runtimes when the table predated the port.
 
+It earned its keep here on the first independent port. The PHP implementation
+was written against the published rows rather than against `src/`, and failed
+**exactly one** of 44 on its first run: `0904`, that an object has no `.length`.
+The row was right and the port was right — PHP simply cannot express the case,
+because `json_decode('{}', true)` and `json_decode('[]', true)` produce the
+identical value and `array_is_list()` calls both a list. Skipped for PHP with
+the reason attached; `0906` pins the same rule with a non-empty object, which
+every language can express.
+
 Discrimination probes are required, not optional: a deliberately-wrong evaluator
 must fail an EXACT set of case ids. A table every plausible implementation passes
-proves nothing.
+proves nothing. Each language's probes should aim at **that language's own
+instincts** — PHP's are `(bool) []`, `'3' == 3` and `'0'`.
+
+A full mutant harness (deliberately-wrong evaluators failing an exact id set,
+the way `shared/decimal` has) is still owed, and is recorded in the suite's
+manifest so the current green tick is not read as the stronger claim.
 
 ## Status
 
-**Not yet implemented.** Registered in `PackageRegistry::PLANNED`, grammar
-specified, repo scaffolded. Nothing is published, and the three registry names do
-not exist yet — see the envelope's `.ai/knowledge/publishing.md` and
-`.claude/skills/ship-it/` before attempting a first publish.
+**TypeScript and PHP implemented and green. Python is not written yet.**
+
+Registered in `PackageRegistry::PLANNED`. **Nothing is published, and none of
+the three registry names exist** — npm, Packagist and PyPI all need a first
+publish, and each bootstraps differently. Read the envelope's
+`.ai/knowledge/publishing.md` and run `.claude/skills/ship-it/preflight.py`
+before attempting one; do not improvise the sequence.

@@ -1,0 +1,58 @@
+{
+    "name": "particle-academy/fancy-expr",
+    "description": "A sandboxed expression evaluator: one grammar, three implementations, asserted against a shared conformance table. Paths, literals, logic, comparisons, ternaries and object/array literals -- with no eval, no host reach and no calls of any kind. A malformed expression throws; an absent path is null, and keeping those two apart is the point.",
+    "type": "library",
+    "keywords": [
+        "expression",
+        "evaluator",
+        "sandbox",
+        "parser",
+        "interpreter",
+        "template",
+        "workflow",
+        "cross-language",
+        "particle-academy"
+    ],
+    "license": "MIT",
+    "homepage": "https://github.com/Particle-Academy/fancy-expr",
+    "support": {
+        "issues": "https://github.com/Particle-Academy/fancy-expr/issues",
+        "source": "https://github.com/Particle-Academy/fancy-expr"
+    },
+    "authors": [
+        {
+            "name": "Particle Academy",
+            "homepage": "https://github.com/Particle-Academy"
+        }
+    ],
+    "require": {
+        "php": "^8.4"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.26",
+        "particle-academy/fancy-conformance": ">=0.16.0 <2.0",
+        "pestphp/pest": "^3.0|^4.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "FancyExpr\\": "php/src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "FancyExpr\\Tests\\": "php/tests/"
+        }
+    },
+    "scripts": {
+        "test": "pest",
+        "lint": "pint --test"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
