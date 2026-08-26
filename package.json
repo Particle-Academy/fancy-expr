@@ -1,7 +1,7 @@
 {
   "name": "@particle-academy/fancy-expr",
-  "version": "0.1.0",
-  "description": "Sandboxed expression evaluator — one grammar, three runtimes. Paths, literals, logic, comparisons, ternaries, object/array literals. No eval, no host reach, no calls.",
+  "version": "0.1.1",
+  "description": "Sandboxed expression evaluator \u2014 one grammar, three runtimes. Paths, literals, logic, comparisons, ternaries, object/array literals. No eval, no host reach, no calls.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.cjs",

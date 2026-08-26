@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fancy-expr"
-version = "0.1.0"
+version = "0.1.1"
 description = "A sandboxed expression evaluator: one grammar, three runtimes, asserted against a shared conformance table. Paths, literals, logic, comparisons, ternaries and object/array literals -- no eval, no host reach, no calls. A malformed expression raises; an absent path is None, and keeping those apart is the point."
 readme = "README.md"
 # 3.11, matching every other Fancy Python package: 3.10 reaches end of life on

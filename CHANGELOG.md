@@ -7,6 +7,23 @@ This package is pre-1.0: **breaking changes land in MINOR releases**, so the
 version number is not a compatibility promise until 1.0. Every breaking entry
 says what a consumer has to DO, not merely what moved.
 
+## [0.1.1] - 2026-08-26
+
+### Changed
+
+- **Re-released through CI so `latest` carries provenance.** No code changed
+  between `0.1.0` and this; the tarballs are the same package.
+
+  `0.1.0` was published from a laptop to claim the npm name, because OIDC
+  publishes to an *existing* name and cannot create one. A laptop publish
+  carries **no attestations** — provenance is signed from OIDC inside CI, which
+  could not run until the name and its Trusted Publisher existed. `0.1.0` is
+  therefore the only version of this package that will ever lack provenance,
+  and it stays on the registry: published versions are never unpublished.
+
+  *Consumer action: none.* Take `0.1.1` if you want the signed artifact;
+  `0.1.0` is byte-identical in behaviour.
+
 ## [0.1.0] - 2026-08-26
 
 The first release. Nothing was published before it, so everything below is new
@@ -136,4 +153,5 @@ was adopted for.
   get wrong, per language: native truthiness, coercing equality, `&&`/`||`
   returning booleans, and (in Python) `True == 1`.
 
+[0.1.1]: https://github.com/Particle-Academy/fancy-expr/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Particle-Academy/fancy-expr/releases/tag/v0.1.0
