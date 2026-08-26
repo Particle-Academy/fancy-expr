@@ -60,6 +60,20 @@ says what a consumer has to DO, not merely what moved.
 
 ### Fixed
 
+- **`py.typed` was missing**, while `pyproject.toml` declared
+  `Typing :: Typed`. Metadata claiming something the wheel did not back: a
+  consumer running mypy against the installed package got
+  `cannot be type checked due to missing py.typed marker` and **no type
+  information at all**, from a package advertising it.
+
+  Six of the kit's eight Python packages ship the marker. The two that did not
+  are `fancy-conformance` and `fancy-expr` — the only two where Python lives in
+  `python/` rather than at the repository root. The same polyglot blind spot
+  that hid the PyPI gap, one layer down.
+
+  It passed locally because `mypy_path = src` type-checks the SOURCE. Only CI,
+  running against the installed package, asked the question a consumer asks.
+
 - **`GRAMMAR.md`'s EBNF was missing the `multiplicative` production entirely**,
   while both shipped implementations parsed `*` and `/` and conformance row
   `0704` (`(1 + 2) * 1 === 3`) requires them.
