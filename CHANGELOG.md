@@ -7,7 +7,10 @@ This package is pre-1.0: **breaking changes land in MINOR releases**, so the
 version number is not a compatibility promise until 1.0. Every breaking entry
 says what a consumer has to DO, not merely what moved.
 
-## [Unreleased]
+## [0.1.0] - 2026-08-26
+
+The first release. Nothing was published before it, so everything below is new
+and there is no upgrade to plan.
 
 ### Added
 
@@ -122,18 +125,15 @@ reason attached, and `0906` now pins the same rule with a non-empty object that
 all three languages can express. That is the spec-first order doing the job it
 was adopted for.
 
-## [0.1.0] - 2026-08-25
-
-### Added
+### Also in this release
 
 - `GRAMMAR.md` — the specification, published **before** any implementation.
 - The TypeScript implementation: tokenizer, parser and evaluator, plus
   `parse()` separable from `evaluate()` so a host can ask *"is this expression
   valid?"* with no data — which is what makes a node carrying a broken
   expression rejectable at **save** time rather than discovered mid-run.
-- Discrimination tests covering the three semantics a plausible-but-wrong port
-  would get wrong: native truthiness, coercing equality, and `&&`/`||`
-  returning booleans instead of the operand.
+- Discrimination tests covering the semantics a plausible-but-wrong port would
+  get wrong, per language: native truthiness, coercing equality, `&&`/`||`
+  returning booleans, and (in Python) `True == 1`.
 
-[Unreleased]: https://github.com/Particle-Academy/fancy-expr/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/Particle-Academy/fancy-expr/releases/tag/v0.1.0

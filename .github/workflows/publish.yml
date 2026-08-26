@@ -1,0 +1,166 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # Release gate: a tag with no CHANGELOG entry fails HERE, before the
+      # package reaches the registry. A published version whose changes are
+      # undocumented cannot be fixed by editing the changelog afterwards — the
+      # tarball is already out, and the agent upgrading into it has no way to
+      # learn what broke.
+      - name: Changelog entry for this tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [ ! -f CHANGELOG.md ]; then
+            echo "::error::No CHANGELOG.md. Every package keeps one."
+            exit 1
+          fi
+          if ! grep -qE "^## +\\[?v?${VERSION}\\]?" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no entry for ${VERSION}. Add one — say what a consumer must DO — then re-tag."
+            exit 1
+          fi
+          # ORDER, not just presence. The check above asks only whether a
+          # heading exists SOMEWHERE. fancy-flow's changelog had four sections
+          # inserted ABOVE the [Unreleased] marker, so everything appended
+          # since -- including 0.49.0 -- landed below them, and reading
+          # top-down showed 0.48.1 as newest. That PASSED the presence check.
+          #
+          # A consumer deciding whether to upgrade reads top-down. Complete but
+          # mis-ordered is a truthful-looking lie, and it is invisible to
+          # whoever wrote it, because they are looking at their own entry
+          # rather than at the file.
+          FIRST=$(grep -E '^## ' CHANGELOG.md                   | grep -viE '^## +\[?unreleased\]?'                   | head -1)
+
+          if ! printf '%s' "$FIRST" | grep -qE "^## +\[?v?${VERSION}\]?"; then
+            echo "::error::CHANGELOG.md has an entry for ${VERSION}, but it is NOT the first version heading."
+            echo "::error::Top of file is: ${FIRST}"
+            echo "::error::Move this release above the older entries, then re-tag."
+            exit 1
+          fi
+
+          echo "Found changelog entry for ${VERSION}, and it is the newest."
+
+      # Release gate: third-party dependencies must be approved and still
+      # maintained BEFORE the tarball reaches the registry. Once it is
+      # published, an unapproved or abandoned dependency has already shipped
+      # to everyone who upgrades -- the same reason the changelog gate sits
+      # here. The allowlist is FETCHED, never vendored: one source of truth,
+      # so there is no per-repo copy that can drift out of agreement with it.
+      - name: Fetch the third-party allowlist
+        uses: actions/checkout@v4
+        with:
+          repository: Particle-Academy/.github
+          path: .third-party-allowlist
+          persist-credentials: false
+
+      - name: Third-party dependency allowlist
+        run: |
+          node .third-party-allowlist/third-party/check.mjs --repo .
+          # Delete it. A fetched checkout left lying in the workspace is not
+          # inert: vitest globbed the checker's own tests out of it and failed
+          # a package whose code was fine. Removed with node, not rm -rf,
+          # because some of these matrices run on windows-latest where a
+          # multi-line run: block is PowerShell and rm -rf is not a command.
+          node -e "require('node:fs').rmSync('.third-party-allowlist',{recursive:true,force:true})"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - run: npm install
+      - run: npm run build
+      # Trusted Publishing (OIDC) — no token. Trusted Publisher configured on
+      # npmjs.com; the bootstrap NPM_TOKEN has been revoked.
+      - name: Publish
+        run: npx -y npm@11.18.0 publish --provenance --access public
+
+
+  # ---------------------------------------------------------------------- #
+  # PyPI
+  #
+  # Build and publish are separate jobs so `id-token: write` is never held by
+  # the job that executes build code.
+  # ---------------------------------------------------------------------- #
+  build-python:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Require a CHANGELOG entry for this tag
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          grep -qE "^## +\[?v?${version}\]?" CHANGELOG.md || {
+            echo "::error::No CHANGELOG.md entry for ${version}."
+            exit 1
+          }
+
+      # The Python package declares its OWN version and it is the one that
+      # reaches PyPI, so it -- not just package.json -- must match the tag.
+      - name: Require python/pyproject.toml to match the tag
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          grep -q "^version = \"${version}\"$" python/pyproject.toml || {
+            echo "::error::python/pyproject.toml does not declare ${version}."
+            exit 1
+          }
+
+      # `--sdist --wheel` explicitly. Bare `python -m build` builds the wheel
+      # FROM the sdist, and fancy-conformance's first Python release died that
+      # way when its force-include reached outside the package directory. This
+      # package has no such include today; naming both targets keeps it that
+      # way by construction rather than by luck.
+      - name: Build
+        working-directory: python
+        run: |
+          python -m pip install --upgrade build
+          python -m build --sdist --wheel
+
+      # `py.typed` is CLAIMED by the classifiers. Assert the wheel carries it
+      # rather than trusting the file to be in the tree -- mypy against an
+      # INSTALLED package is the only thing that asks a consumer's question,
+      # and this package shipped without the marker until it was checked here.
+      - name: The wheel carries py.typed
+        working-directory: python
+        run: |
+          python -c "import glob,zipfile,sys; n=zipfile.ZipFile(glob.glob('dist/*.whl')[0]).namelist(); ok=any(x.endswith('py.typed') for x in n); print('py.typed in wheel:', ok); sys.exit(0 if ok else 1)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-dists
+          path: python/dist/
+
+  publish-python:
+    needs: build-python
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/fancy-expr
+    permissions:
+      id-token: write        # mandatory for Trusted Publishing; there is no token
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-dists
+          path: dist/
+      # Pinned by SHA, not by tag: a mutable reference in exactly this position
+      # is what the April 2026 supply-chain compromises exploited.
+      # v1.14.2 -- no `password:` (that is the point), attestations default on.
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33
