@@ -29,6 +29,19 @@ says what a consumer has to DO, not merely what moved.
 
   *Consumer action: none.* Nothing was published from the old layout.
 
+### Security
+
+- **`esbuild` forced to `^0.28.1` via an npm `override`** (GHSA-g7r4-m6w7-qqqr,
+  low). `tsup@8.5.1` still declares `esbuild: ^0.27.0`, so the real fix — the
+  dependency that pulls it shipping a patched range — does not exist upstream
+  yet. Eight sibling repos in the kit carry the identical override for the same
+  reason; all of them drop it the moment tsup ships `esbuild >=0.28.1`.
+
+  Build-time only, and `npm ls esbuild` reports `0.28.2 overridden`.
+
+  *Consumer action: none.* `esbuild` is not in this package's dependency tree —
+  it only builds the tarball.
+
 ### Notes
 
 The PHP port failed **exactly one row** on its first run — `0904`, that an
