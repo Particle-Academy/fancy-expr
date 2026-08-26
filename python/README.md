@@ -6,11 +6,11 @@ A sandboxed expression evaluator — **one grammar, three implementations**
 ```python
 from fancy_expr import evaluate, parse, references
 
-evaluate("in.transcript || in.content", {"in": {"content": "hi"}})   # 'hi'
-evaluate("results.length === 0 ? 'none' : 'ok'", {"results": []})    # 'none'
+evaluate("in.transcript || in.content", {"in": {"content": "hi"}})  # 'hi'
+evaluate("results.length === 0 ? 'none' : 'ok'", {"results": []})  # 'none'
 
-parse("in.a &&")        # raises ExprSyntaxError — ask this at SAVE time
-references("{ when: $now }")   # ['$now'] — and the HOST decides if that exists
+parse("in.a &&")  # raises ExprSyntaxError — ask this at SAVE time
+references("{ when: $now }")  # ['$now'] — and the HOST decides if that exists
 ```
 
 ## The one thing to know
