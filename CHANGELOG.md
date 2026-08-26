@@ -24,6 +24,15 @@ says what a consumer has to DO, not merely what moved.
   *Consumer action: none.* Take `0.1.1` if you want the signed artifact;
   `0.1.0` is byte-identical in behaviour.
 
+  **A note on reading npm's errors, because one of them misled this release.**
+  The first CI attempt failed with *"cannot publish over the previously
+  published versions: 0.1.0"*, which was taken as proof that OIDC had
+  authenticated — npm appearing to reject the version rather than the
+  credentials. It is not proof: that check is answered from the read side. The
+  next attempt, at a version that did not yet exist, got `E404` on the `PUT`
+  instead — the actual signature of a missing Trusted Publisher. Two errors,
+  one cause, and the more reassuring one came first.
+
 ## [0.1.0] - 2026-08-26
 
 The first release. Nothing was published before it, so everything below is new
