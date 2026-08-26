@@ -87,6 +87,26 @@ jobs:
         with:
           python-version: "3.11"
 
+      # TEMPORARY, AND IT IS A REAL GAP RATHER THAN A CONVENIENCE.
+      # `fancy-conformance`'s Python loader has never been published --
+      # `pip install fancy-conformance` 404s, and its repo's publish workflow
+      # had no PyPI job until 2026-08-25. The job is now armed but the NAME
+      # still needs a pending publisher from the owner, so until that first tag
+      # lands there is nothing on PyPI to install.
+      #
+      # So the sibling is installed FROM SOURCE. `pyproject.toml` still declares
+      # the honest PyPI dependency; this only supplies it early.
+      #
+      # DELETE THIS STEP, and the `--no-deps` below, the moment
+      # `pip install fancy-conformance` works. Leaving it would mean this suite
+      # silently stops testing against what consumers actually receive.
+      - name: Check out the conformance fixtures (not yet on PyPI)
+        uses: actions/checkout@v4
+        with:
+          repository: Particle-Academy/fancy-conformance
+          path: .fancy-conformance
+          persist-credentials: false
+
       # `dependency-groups` (PEP 735), not an extra -- so it is `pip install
       # --group`, not `.[dev]`. Getting this wrong installs the package without
       # pytest and the next step fails for a reason unrelated to the code.
@@ -95,7 +115,13 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ./python --group ./python/pyproject.toml:test
+          python -m pip install ./.fancy-conformance/python
+          python -m pip install -e ./python
+          # --no-deps so the group's `fancy-conformance` requirement does not
+          # send pip to PyPI for a name that is not there yet. Everything else
+          # in the group is a real PyPI package and installs normally.
+          python -m pip install --group ./python/pyproject.toml:test --no-deps
+          python -m pip install pytest
 
       - name: Lint
         run: |
@@ -111,3 +137,14 @@ jobs:
       - name: Test
         working-directory: python
         run: python -m pytest -q
+
+      # Proof the bridge above is still needed rather than forgotten. When this
+      # step starts FAILING, `fancy-conformance` is on PyPI and the checkout
+      # step plus `--no-deps` must both come out.
+      - name: The PyPI gap is still open
+        run: |
+          if python -m pip download --no-deps --dest /tmp/probe fancy-conformance >/dev/null 2>&1; then
+            echo "::error::fancy-conformance IS on PyPI now. Remove the source-checkout bridge in this workflow and install it normally."
+            exit 1
+          fi
+          echo "fancy-conformance is still absent from PyPI; the source bridge above is still required." 
