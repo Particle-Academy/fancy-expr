@@ -11,13 +11,68 @@ says what a consumer has to DO, not merely what moved.
 
 ### Added
 
+- **The Python implementation** (`fancy_expr`), the third and last, written
+  against the published rows and `GRAMMAR.md` rather than against either
+  sibling. It passes **48 of 48** with nothing skipped — including `0904`,
+  the row PHP cannot express.
+
+- **`references(expression)` — what an expression READS**, in all three
+  runtimes. The root identifiers it needs, unique and sorted, answered with no
+  data and no evaluation. A malformed expression throws exactly as `parse` does.
+
+  This is the second half of *"a node that cannot fire correctly can never be
+  saved"*. `parse` catches an expression that is not **syntax**; `references`
+  catches one that is valid syntax **reading a name that will never exist**.
+
+  It came from a field report: `{{ $now }}` rendered as nothing, because a `$`
+  root reads to an author as *engine-provided* and agents reach for `$now` /
+  `$today` / `$index` the way they reach for the ones that exist. A real
+  document shipped titled `"Deal List Export -"` with the date silently
+  missing. The reporter's own framing is the one that made this possible — an
+  unknown `$` root is detectable at PARSE time in a way `in.genuinely_absent`
+  is not.
+
+  **The allowlist is the host's, never this package's.** `$json`, `$input` and
+  `$props` are real in one host and meaningless in another, so a list here would
+  be wrong for every consumer but one:
+
+  ```ts
+  const unknown = references(expr).filter((r) => !provided.has(r));
+  if (unknown.length) throw new Error(`No such value: ${unknown.join(", ")}`);
+  ```
+
+  The same list also refuses a node id that is not a direct predecessor, which
+  was the second reported shape. It deliberately cannot catch `in.output` — a
+  real root with a field that node never emits — and the suite manifest says so.
+
+- **CI, with all three suites as required jobs** plus `ruff` and `mypy --strict`
+  on the Python side. A language whose suite does not run is a language whose
+  agreement with the other two is a claim rather than a test result.
+
 - **The PHP implementation** (`FancyExpr\Expr`), written against the published
   `expr/evaluate` conformance rows rather than against the TypeScript source.
   Same grammar, same table, same verdicts.
+
 - **`.length`**, the one pseudo-property, on arrays and strings. It is
   load-bearing rather than convenient: `[]` is truthy in this grammar, so
   without `.length` there would be no way to ask whether a collection is
   *empty*. Objects deliberately have none.
+
+### Fixed
+
+- **`GRAMMAR.md`'s EBNF was missing the `multiplicative` production entirely**,
+  while both shipped implementations parsed `*` and `/` and conformance row
+  `0704` (`(1 + 2) * 1 === 3`) requires them.
+
+  This is the more dangerous of the two spec-versus-code contradictions this
+  package has had, and it points the wrong way: a port written faithfully from
+  the specification alone would have rejected a valid expression and failed the
+  table, with the **table right and the specification wrong**. Found while
+  starting the Python port, which is exactly when it would have bitten.
+
+  The arithmetic section now also states `/` by zero yielding `null` (infinity
+  cannot survive the JSON round trip these expressions live in) and a comparison
+  with an absent operand yielding `false` rather than an error.
 
 ### Changed
 

@@ -68,13 +68,12 @@ and there are three runtimes to keep in step.
 One repo, three languages, mirroring `fancy-conformance`:
 
 ```
-GRAMMAR.md         the specification -- read it first
-src/               TypeScript
-tests/
-php/src/           PHP
-php/tests/
-composer.json      AT THE ROOT, psr-4 -> php/src/
-phpunit.xml        AT THE ROOT, testsuite -> php/tests
+GRAMMAR.md              the specification -- read it first
+src/  tests/            TypeScript
+php/src/  php/tests/    PHP
+python/src/  python/tests/   Python (its own pyproject.toml, published as `fancy-expr`)
+composer.json           AT THE ROOT, psr-4 -> php/src/
+phpunit.xml             AT THE ROOT, testsuite -> php/tests
 ```
 
 **`composer.json` belongs at the repository root and nowhere else.** Packagist
@@ -85,9 +84,15 @@ This repo had it in `php/` for exactly one afternoon.
 ## Testing
 
 ```bash
-npm test                      # TypeScript: table + discrimination probes
-php vendor/bin/pest           # PHP: the same table, plus PHP-specific probes
+npm test                                   # TypeScript
+php vendor/bin/pest                        # PHP
+cd python && python -m pytest -q           # Python
 ```
+
+All three are required CI jobs. A language whose suite does not run is a
+language whose agreement with the other two is a claim rather than a test
+result -- which is the failure the shared table exists to prevent, and
+reproducing it here would be absurd.
 
 Every semantic rule in `GRAMMAR.md` is a row in the shared corpus, and each
 implementation runs the same rows. Add the row FIRST, then satisfy it in all
@@ -112,12 +117,26 @@ A full mutant harness (deliberately-wrong evaluators failing an exact id set,
 the way `shared/decimal` has) is still owed, and is recorded in the suite's
 manifest so the current green tick is not read as the stronger claim.
 
+## Two exported questions, and the second is newer
+
+`evaluate()` is the obvious one. `references()` is the static one: the ROOT
+names an expression reads, sorted, with no data. It exists so a host can enforce
+"a node that cannot fire correctly can never be saved" for the case `parse()`
+cannot see -- valid syntax reading a name that will never exist.
+
+**The allowlist is the host's and must never move in here.** `$json`, `$input`
+and `$props` are real in one host and meaningless in another; a list in this
+package would be wrong for every consumer but one. Answer what is read, let the
+host decide what exists.
+
 ## Status
 
-**TypeScript and PHP implemented and green. Python is not written yet.**
+**All three implementations are written and green** against both
+`expr/evaluate` and `expr/references`.
 
-Registered in `PackageRegistry::PLANNED`. **Nothing is published, and none of
-the three registry names exist** — npm, Packagist and PyPI all need a first
+Still registered in `PackageRegistry::PLANNED`, because "built" is not
+"published". **Nothing is published, and none of the three registry names
+exist** — npm, Packagist and PyPI all need a first
 publish, and each bootstraps differently. Read the envelope's
 `.ai/knowledge/publishing.md` and run `.claude/skills/ship-it/preflight.py`
 before attempting one; do not improvise the sequence.

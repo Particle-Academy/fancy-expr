@@ -35,7 +35,8 @@ or           := and ( "||" and )*
 and          := equality ( "&&" equality )*
 equality     := comparison ( ( "==" | "!=" | "===" | "!==" ) comparison )*
 comparison   := additive ( ( "<" | "<=" | ">" | ">=" ) additive )*
-additive     := unary ( ( "+" | "-" ) unary )*
+additive     := multiplicative ( ( "+" | "-" ) multiplicative )*
+multiplicative := unary ( ( "*" | "/" ) unary )*
 unary        := ( "!" | "-" )? primary
 primary      := literal | path | array | object | "(" expression ")"
 
@@ -48,7 +49,16 @@ key          := IDENT | string
 ```
 
 Precedence runs lowest to highest exactly as listed: ternary, `||`, `&&`,
-equality, comparison, `+ -`, unary, primary.
+equality, comparison, `+ -`, `* /`, unary, primary.
+
+**The `multiplicative` line was missing from this block until 2026-08-25** — the
+second time the spec has contradicted the code in this package, and the worse of
+the two. Both shipped implementations parsed `*` and `/`; only the grammar did
+not mention them, and conformance row `0704` (`(1 + 2) * 1 === 3`) *requires*
+them. So a port written faithfully from this file alone would have rejected a
+valid expression and failed the table — with the table right and the
+specification wrong, which is the one direction this whole arrangement is not
+supposed to allow. Found while starting the Python port.
 
 ## Semantics, and where they are pinned
 
@@ -122,10 +132,29 @@ There is no loose equality in this grammar. `"1" == 1` is `false`. A language
 with two equality operators that differ subtly is a language that generates
 bug reports, and we have three runtimes to keep in step.
 
-### Numbers
+### Arithmetic
 
-One numeric type, IEEE-754 double, matching JSON. `+` on two numbers adds; `+`
-where either side is a string concatenates; `-` is numeric only.
+One numeric type, IEEE-754 double, matching JSON.
+
+| operator | rule |
+|---|---|
+| `+` | two numbers add; if **either** side is a string, both are stringified and concatenated; otherwise `null` |
+| `-` `*` | numeric only — anything else is `null` |
+| `/` | numeric only, **and division by zero is `null`** |
+| `<` `<=` `>` `>=` | two numbers, or two strings lexicographically; a mixed or absent operand is **`false`**, not an error |
+
+Two deliberate choices in that table:
+
+**Division by zero is `null`, not `Infinity` and not a throw.** `Infinity` is
+not representable in JSON, so returning it would produce a value that cannot
+survive the round trip these expressions live inside.
+
+**A comparison with an absent operand is `false`, not a failure.** `{{ x > 5 }}`
+where `x` never arrived is a question with no answer, and answering `false` is
+survivable in a way that killing the run is not. This is the one place the
+grammar prefers a quiet answer — and it is safe only because *malformity* still
+throws, so "the author wrote nonsense" and "the data did not arrive" remain
+distinguishable.
 
 ### Short-circuit
 
@@ -146,6 +175,54 @@ that as `false` is a decision it did not make.
 Parsing is separable from evaluation precisely so a host can ask *"is this
 expression valid?"* without any data — which is what makes a node with a broken
 expression rejectable at **save** time rather than discovered at run time.
+
+## What an expression READS — `references()`
+
+`references(expression)` returns the **root identifiers** an expression needs,
+unique and sorted, with no data and no evaluation. A malformed expression throws
+exactly as `parse` does.
+
+```ts
+references("{ deal: in.deal_id || '', when: $now }")   // ["$now", "in"]
+```
+
+**This is the second half of "cannot fire ⇒ cannot save".** `parse` catches an
+expression that is not *syntax*; `references` catches one that is valid syntax
+reading something that does not exist.
+
+It exists because of a specific failure. `{{ $now }}` rendered as nothing: a
+`$`-prefixed root reads to an author as *engine-provided*, so agents reach for
+`$now` / `$today` / `$index` the way they reach for the ones that exist, and a
+real document shipped titled `"Deal List Export -"` with the date silently
+missing. An unknown `$` root **is** detectable statically, in a way that
+`in.genuinely_absent` is not — the first is a name that will never exist, the
+second is data that may arrive tomorrow.
+
+**The allowlist is the host's, never this package's.** `fancy-expr` cannot know
+whether `$now` exists; `$json`, `$input` and `$props` are real in one host and
+meaningless in another, so a list here would be wrong for everyone but one
+consumer. So it answers only what it can answer honestly, and the host decides:
+
+```ts
+const unknown = references(expr).filter((r) => !provided.has(r));
+if (unknown.length) throw new Error(`No such value: ${unknown.join(", ")}`);
+```
+
+The same list refuses a node id that is not a direct predecessor, which was the
+second reported shape.
+
+Three rules, each pinned in `expr/references`:
+
+| | |
+|---|---|
+| Object literal **keys** are not references | `{ transcript: in.content }` reads `in`. Reporting `transcript` makes a host reject a valid expression, and the author cannot comply — the worse direction of wrong. |
+| **Both** branches of a ternary are read | A static question has no run. Reusing the evaluator's short-circuit approves an expression that fails on the other road. |
+| A **computed index** is a reference | `items[i]` reads `i`. An implementation walking only `.name` steps passes everything else. |
+
+**It cannot catch `in.output`** — a real root with a field that node never
+emits. The root is legitimate, so nothing static separates a field that is
+absent from one absent *this run*. That is the boundary, and it is stated rather
+than left to be discovered.
 
 ## Why hand-written rather than a library
 

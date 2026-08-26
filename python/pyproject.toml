@@ -1,0 +1,92 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fancy-expr"
+version = "0.1.0"
+description = "A sandboxed expression evaluator: one grammar, three runtimes, asserted against a shared conformance table. Paths, literals, logic, comparisons, ternaries and object/array literals -- no eval, no host reach, no calls. A malformed expression raises; an absent path is None, and keeping those apart is the point."
+readme = "README.md"
+# 3.11, matching every other Fancy Python package: 3.10 reaches end of life on
+# 2026-10-31, and a floor that dies before the package's second release is not
+# a floor.
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Particle Academy" }]
+keywords = [
+    "expression",
+    "evaluator",
+    "sandbox",
+    "parser",
+    "interpreter",
+    "template",
+    "workflow",
+    "cross-language",
+    "particle-academy",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Interpreters",
+    "Typing :: Typed",
+]
+
+# ZERO runtime dependencies, and that is a requirement rather than a happy
+# accident. This package is a SANDBOX: every dependency it took would be code
+# running against expressions that arrive from end users and from agents.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/Particle-Academy/fancy-expr"
+Issues = "https://github.com/Particle-Academy/fancy-expr/issues"
+Source = "https://github.com/Particle-Academy/fancy-expr"
+
+[dependency-groups]
+test = ["pytest>=8.0", "fancy-conformance>=0.16.0,<2.0"]
+lint = ["ruff>=0.16"]
+typecheck = ["mypy>=1.11"]
+dev = [{ include-group = "test" }, { include-group = "lint" }, { include-group = "typecheck" }]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fancy_expr"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests", "/README.md", "/pyproject.toml", "/LICENSE"]
+
+[tool.hatch.build.targets.sdist.force-include]
+"../GRAMMAR.md" = "GRAMMAR.md"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# `pythonpath` so the suite runs on a bare checkout with nothing but pytest and
+# the conformance loader, the way `npm test` and `vendor/bin/pest` do for the
+# two peer implementations.
+pythonpath = ["src"]
+addopts = "--import-mode=importlib -ra"
+filterwarnings = ["error"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "N", "C4", "PT"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["PT011", "PT018"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["fancy_expr"]
+mypy_path = "src"
+strict = true
+# An expression's context and its result are JSON: `Any` is the honest type.
+disallow_any_expr = false
+disallow_any_explicit = false

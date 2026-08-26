@@ -4,13 +4,22 @@ A sandboxed expression evaluator with **one grammar and three implementations**
 — TypeScript, PHP and Python — all asserted against the same fixture table.
 
 ```ts
-import { evaluate, parse } from "@particle-academy/fancy-expr";
+import { evaluate, parse, references } from "@particle-academy/fancy-expr";
 
 evaluate("in.transcript || in.content", { in: { content: "hi" } });  // "hi"
 evaluate("results.length === 0 ? 'none' : 'ok'", { results: [] });   // "none"
 
-parse("in.a &&");   // throws — ask this at SAVE time, before a run
+parse("in.a &&");            // throws — ask this at SAVE time, before a run
+references("{ when: $now }") // ["$now"] — and the HOST decides if that exists
 ```
+
+Three implementations, one table:
+
+| | |
+|---|---|
+| TypeScript | `npm i @particle-academy/fancy-expr` |
+| PHP | `composer require particle-academy/fancy-expr` |
+| Python | `pip install fancy-expr` |
 
 ## The one thing to know
 
@@ -21,6 +30,27 @@ That distinction is the entire reason this package exists. Its absence cost a
 consumer a production workflow: a branch condition the engine could not evaluate
 returned `null`, `null` read as `false`, and the graph took the wrong road on
 every run — while reporting success, with no error and no log line.
+
+## Two halves of "cannot fire ⇒ cannot save"
+
+`parse()` catches an expression that is not **syntax**. `references()` catches
+one that is valid syntax **reading something that does not exist** — it returns
+the root names an expression needs, sorted, with no data at all:
+
+```ts
+const unknown = references(expr).filter((r) => !provided.has(r));
+if (unknown.length) throw new Error(`No such value: ${unknown.join(", ")}`);
+```
+
+The allowlist is deliberately the **host's**. This package cannot know whether
+`$now` exists — `$json`, `$input` and `$props` are real in one host and
+meaningless in another. It answers what it can answer honestly and lets the host
+decide.
+
+That came from a second field report: `{{ $now }}` rendered as nothing, because
+a `$` root reads to an author as *engine-provided* and agents reach for `$now` /
+`$today` / `$index` the way they reach for the ones that exist. A real document
+shipped titled `"Deal List Export -"` with the date silently missing.
 
 ## What it is not
 

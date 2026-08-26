@@ -69,6 +69,129 @@ final class Expr
     }
 
     /**
+     * The ROOT identifiers an expression reads — unique, sorted, no data needed.
+     *
+     * ## Why this exists
+     *
+     * A consumer reported that `{{ $now }}` renders as nothing. `$`-prefixed
+     * roots read to an author as *engine-provided*, so agents reach for `$now`,
+     * `$today` and `$index` the way they reach for the two that actually exist
+     * — and a real document shipped titled `"Deal List Export -"` with the date
+     * silently missing. Their observation is the one that mattered: an unknown
+     * `$` root is detectable at PARSE time in a way `in.genuinely_absent` is
+     * not.
+     *
+     * ## Why the check does not live in here
+     *
+     * This package cannot know whether `$now` exists. `$json`, `$input` and
+     * `$props` are real in one host and meaningless in another, so an allowlist
+     * here would be wrong for every host but one. It answers the only question
+     * it can answer honestly and the HOST compares that against what it
+     * provides:
+     *
+     * ```php
+     * $unknown = array_diff(Expr::references($expr), $provided);
+     * if ($unknown !== []) {
+     *     throw new InvalidArgumentException('No such value: '.implode(', ', $unknown));
+     * }
+     * ```
+     *
+     * That also catches the second reported shape — `{{ n2.transcript }}`, a
+     * real node id two hops upstream, legal-looking and resolving to nothing
+     * because a node id addresses only a *direct* predecessor.
+     *
+     * It deliberately CANNOT catch `{{ in.output }}` — a real port with a field
+     * that node never emits. The root is legitimate, so nothing static
+     * separates an absent field from one absent *this run*.
+     *
+     * Throws on a malformed expression exactly as `parse()` does. Returning an
+     * empty list there would tell a host "this needs nothing" and let it save a
+     * node that can never run.
+     *
+     * @return list<string>
+     */
+    public static function references(string $expression): array
+    {
+        $found = [];
+        self::collectReferences(self::parse($expression), $found);
+
+        $roots = array_keys($found);
+        // Sorted, not insertion-ordered: three languages must produce the SAME
+        // list, and insertion order agrees with a sorted one often enough to
+        // look correct and not always.
+        sort($roots);
+
+        return $roots;
+    }
+
+    /**
+     * @param  array<string,mixed>  $node
+     * @param  array<string,true>  $out
+     */
+    private static function collectReferences(array $node, array &$out): void
+    {
+        switch ($node['kind']) {
+            case 'literal':
+                return;
+
+            case 'path':
+                $segments = $node['segments'];
+                // The head is the root; every later segment is a step INTO it,
+                // and a named step is never a name the host has to supply.
+                if (isset($segments[0]['name'])) {
+                    $out[$segments[0]['name']] = true;
+                }
+                foreach (array_slice($segments, 1) as $segment) {
+                    // A computed index IS a reference. `items[i]` reads `i`,
+                    // and a typo'd index gets the same silent empty as `$now`.
+                    if (isset($segment['expr'])) {
+                        self::collectReferences($segment['expr'], $out);
+                    }
+                }
+
+                return;
+
+            case 'array':
+                foreach ($node['items'] as $item) {
+                    self::collectReferences($item, $out);
+                }
+
+                return;
+
+            case 'object':
+                // KEYS are written, not read. Collecting them would make a host
+                // reject `{ transcript: in.content }` — a false rejection at
+                // save time, which is the worse direction because the author
+                // has no way to comply.
+                foreach ($node['entries'] as $entry) {
+                    self::collectReferences($entry['value'], $out);
+                }
+
+                return;
+
+            case 'ternary':
+                // Every branch, not only the one a run would take. A static
+                // question has no run; short-circuiting here would approve an
+                // expression that fails on the other road.
+                self::collectReferences($node['test'], $out);
+                self::collectReferences($node['then'], $out);
+                self::collectReferences($node['other'], $out);
+
+                return;
+
+            case 'logical':
+            case 'binary':
+                self::collectReferences($node['left'], $out);
+                self::collectReferences($node['right'], $out);
+
+                return;
+
+            case 'unary':
+                self::collectReferences($node['operand'], $out);
+        }
+    }
+
+    /**
      * Is this value truthy, by THIS grammar's rules rather than PHP's?
      *
      * Rows 0301-0305. The one that matters: `[]` is **TRUE** here, where PHP's

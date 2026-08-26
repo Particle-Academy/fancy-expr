@@ -17,3 +17,4 @@
  * being the same value is the reason this package exists.
  */
 export { evaluate, evaluateNode, truthy, parse, ExprSyntaxError, type Node } from "./evaluate";
+export { references } from "./references";
