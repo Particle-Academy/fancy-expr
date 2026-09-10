@@ -1,7 +1,7 @@
 {
   "name": "@particle-academy/fancy-expr",
   "version": "0.1.1",
-  "description": "Sandboxed expression evaluator \u2014 one grammar, three runtimes. Paths, literals, logic, comparisons, ternaries, object/array literals. No eval, no host reach, no calls.",
+  "description": "Sandboxed expression evaluator — one grammar, three runtimes. Paths, literals, logic, comparisons, ternaries, object/array literals. No eval, no host reach, no calls.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -39,7 +39,7 @@
     "@particle-academy/fancy-conformance": "^0.18.0",
     "tsup": "^8.5.0",
     "typescript": "^5.9.2",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.11"
   },
   "overrides": {
     "esbuild": "^0.28.1"
