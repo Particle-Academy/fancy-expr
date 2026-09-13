@@ -28,9 +28,12 @@ from fancy_expr import ExprSyntaxError, evaluate, truthy
 # after re-running both tables against a v0.22.0 checkout: expr/evaluate 49,
 # expr/references 12, nothing failed or skipped.
 #
-# The Node and PHP jobs do NOT read this pin: they get the fixtures from npm and
-# Packagist. CI checks out `ref: v<this>` in .github/workflows/ci.yml. Move the
-# two together, and only after re-running the tables;
+# The Node and PHP jobs get the fixtures from npm and Packagist, and pin the SAME
+# version there: package.json's range plus the committed lockfile for Node, an
+# exact require-dev constraint for PHP. php/tests/ConformanceTest.php fails if
+# this constant, composer.json and package.json disagree. CI checks out
+# `ref: v<this>` in .github/workflows/ci.yml. Move all of them together, and only
+# after re-running the tables in every runtime;
 # test_ci_checks_out_the_fixture_tag_this_suite_pins fails otherwise.
 PINNED_SUITE_VERSION = "0.22.0"
 

@@ -94,6 +94,16 @@ language whose agreement with the other two is a claim rather than a test
 result -- which is the failure the shared table exists to prevent, and
 reproducing it here would be absurd.
 
+**All three run the same PINNED fixture set, and each prints and asserts it.**
+Node pins through `package.json` plus the committed lockfile; PHP through an
+EXACT `require-dev` constraint, because `composer.lock` is not committed and a
+range would resolve the newest Packagist release on the day CI runs (it did:
+PHP read 0.22.0 while Node was locked at 0.18.0, and neither said so); Python
+through `PINNED_SUITE_VERSION` and the tag its CI checks out. A test on each side
+fails if the installed version, the manifests or the Python constant disagree,
+so moving the pin is one deliberate commit that touches all of them, made only
+after re-running both tables in every runtime.
+
 Every semantic rule in `GRAMMAR.md` is a row in the shared corpus, and each
 implementation runs the same rows. Add the row FIRST, then satisfy it in all
 three — the spec-first order, which repeatedly caught real defects in the flow

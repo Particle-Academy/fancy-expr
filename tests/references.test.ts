@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 import CASES from "@particle-academy/fancy-conformance/suites/expr/references/cases.json" with { type: "json" };
+import { formatSummary, runTable } from "@particle-academy/fancy-conformance";
 import { ExprSyntaxError, references } from "../src/index";
 
 type Case = {
@@ -24,6 +25,27 @@ describe("expr/references", () => {
     // The vacuity guard. An empty array passes every assertion below over
     // nothing, and reads exactly as green in a CI log.
     expect(cases.length).toBeGreaterThan(8);
+  });
+
+  it("prints the table summary, skips and all", () => {
+    // Rule 3: the per-case tests below are the assertions; this is the log line.
+    // The pinned version is asserted in conformance.test.ts.
+    const summary = runTable(
+      "expr/references",
+      (c) => {
+        try {
+          return { ok: true, value: references((c.input as Case["input"]).expression) };
+        } catch (error) {
+          if (error instanceof ExprSyntaxError) return { ok: false };
+          throw error;
+        }
+      },
+      { language: "node" },
+    );
+
+    console.info(`\n${formatSummary(summary)}`);
+    expect(summary.ok, formatSummary(summary)).toBe(true);
+    expect(summary.passed + summary.skipped).toBe(cases.length);
   });
 
   for (const c of cases) {
