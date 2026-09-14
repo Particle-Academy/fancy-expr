@@ -29,13 +29,18 @@ import { evaluate, ExprSyntaxError } from "../src/index";
  * re-running both tables in every runtime -- expr/evaluate 49 (PHP skips 0904),
  * expr/references 12; both tables are byte-identical between 0.18.0 and 0.22.0.
  *
+ * Moved 0.22.0 -> 0.22.1 on 2026-09-13. That release changed no case and no
+ * golden (the Rust loader pins fancy-json by tag, plus docs); both tables were
+ * re-run against 0.22.1 in every runtime first all the same, with the counts
+ * above unchanged: expr/evaluate 49 (PHP 48 + the 0904 skip), expr/references 12.
+ *
  * Moved deliberately, never automatically: a pin that follows disk asserts
  * nothing. Moving it means package.json + package-lock.json, composer.json's
  * EXACT require-dev constraint, PINNED_SUITE_VERSION here and in
  * php/tests/ConformanceTest.php, and python/tests/test_conformance.py together
  * with its CI checkout ref -- the tests on every side fail until all agree.
  */
-const PINNED_SUITE_VERSION = "0.22.0";
+const PINNED_SUITE_VERSION = "0.22.1";
 
 describe("the pinned fixture set", () => {
   it("is the one installed, printed and asserted", () => {

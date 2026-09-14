@@ -28,6 +28,11 @@ from fancy_expr import ExprSyntaxError, evaluate, truthy
 # after re-running both tables against a v0.22.0 checkout: expr/evaluate 49,
 # expr/references 12, nothing failed or skipped.
 #
+# Moved 0.22.0 -> 0.22.1 on 2026-09-13. That release changed no case and no
+# golden (the Rust loader pins fancy-json by tag, plus docs); both tables were
+# re-run against a v0.22.1 checkout first all the same: expr/evaluate 49,
+# expr/references 12, nothing failed or skipped, unchanged.
+#
 # The Node and PHP jobs get the fixtures from npm and Packagist, and pin the SAME
 # version there: package.json's range plus the committed lockfile for Node, an
 # exact require-dev constraint for PHP. php/tests/ConformanceTest.php fails if
@@ -35,7 +40,7 @@ from fancy_expr import ExprSyntaxError, evaluate, truthy
 # `ref: v<this>` in .github/workflows/ci.yml. Move all of them together, and only
 # after re-running the tables in every runtime;
 # test_ci_checks_out_the_fixture_tag_this_suite_pins fails otherwise.
-PINNED_SUITE_VERSION = "0.22.0"
+PINNED_SUITE_VERSION = "0.22.1"
 
 
 def test_the_pinned_fixture_version_is_the_one_on_disk(

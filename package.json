@@ -36,7 +36,7 @@
     "lint": "tsc --noEmit"
   },
   "devDependencies": {
-    "@particle-academy/fancy-conformance": "^0.22.0",
+    "@particle-academy/fancy-conformance": "^0.22.1",
     "tsup": "^8.5.0",
     "typescript": "^5.9.2",
     "vitest": "^4.1.11"

@@ -39,8 +39,12 @@ use ParticleAcademy\Conformance\Conformance;
  * documented skip, 0904), expr/references 12 -- the same as at 0.18.0, whose
  * two tables are byte-identical to 0.22.0's. Move it only with the Node and
  * Python pins; the tests on every side fail until all of them agree.
+ *
+ * Moved 0.22.0 -> 0.22.1 on 2026-09-13. That release changed no case and no
+ * golden; both tables were re-run here against 0.22.1 first all the same:
+ * expr/evaluate 48 (+1 documented skip, 0904), expr/references 12, unchanged.
  */
-const PINNED_SUITE_VERSION = '0.22.0';
+const PINNED_SUITE_VERSION = '0.22.1';
 
 it('runs against the pinned fixture set, and says which', function (): void {
     echo "\nfancy-conformance installed: ".Conformance::version().', pinned: '.PINNED_SUITE_VERSION."\n";
