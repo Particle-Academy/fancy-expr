@@ -22,7 +22,7 @@ from fancy_conformance import format_summary, run_table, version
 from fancy_expr import ExprSyntaxError, evaluate, truthy
 
 # The fixture set the PYTHON job runs against. It checks fancy-conformance out
-# from git (the loader is not on PyPI yet), so without a pin and a matching `ref`
+# from git (its loader is never on PyPI), so without a pin and a matching `ref`
 # it would test whatever `main` is on the day: every fixture release could turn
 # this job red for a reason no commit here caused. Pinned at 0.22.0 on 2026-09-13
 # after re-running both tables against a v0.22.0 checkout: expr/evaluate 49,

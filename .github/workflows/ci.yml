@@ -87,19 +87,13 @@ jobs:
         with:
           python-version: "3.11"
 
-      # TEMPORARY, AND IT IS A REAL GAP RATHER THAN A CONVENIENCE.
-      # `fancy-conformance`'s Python loader has never been published --
-      # `pip install fancy-conformance` 404s, and its repo's publish workflow
-      # had no PyPI job until 2026-08-25. The job is now armed but the NAME
-      # still needs a pending publisher from the owner, so until that first tag
-      # lands there is nothing on PyPI to install.
-      #
-      # So the sibling is installed FROM SOURCE. `pyproject.toml` still declares
-      # the honest PyPI dependency; this only supplies it early.
-      #
-      # DELETE THIS STEP, and the `--no-deps` below, the moment
-      # `pip install fancy-conformance` works. Leaving it would mean this suite
-      # silently stops testing against what consumers actually receive.
+      # The shared conformance fixtures and their Python loader. This is the
+      # PERMANENT way the Python job gets them, not a bridge: `fancy-conformance`
+      # is the suite's internal alignment tool, not a product, and is never
+      # published to PyPI. So it is in no dependency group; the checkout's
+      # `python/src` goes on PYTHONPATH in the Test step below, the same way
+      # pyproject's pytest `pythonpath` finds it beside this repository in the
+      # .agi envelope.
       #
       # At the TAG the Python suite pins (PINNED_SUITE_VERSION in
       # python/tests/test_conformance.py), never `main`. The pin is the contract:
@@ -107,7 +101,7 @@ jobs:
       # else's release. With no `ref`, every fixture release could turn this job
       # red for a reason no commit in this repository caused; four sibling ports
       # sat red for weeks that way. A test fails if this ref and the pin disagree.
-      - name: Check out the conformance fixtures (not yet on PyPI)
+      - name: Check out fancy-conformance
         uses: actions/checkout@v4
         with:
           repository: Particle-Academy/fancy-conformance
@@ -123,13 +117,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install ./.fancy-conformance/python
-          python -m pip install -e ./python
-          # --no-deps so the group's `fancy-conformance` requirement does not
-          # send pip to PyPI for a name that is not there yet. Everything else
-          # in the group is a real PyPI package and installs normally.
-          python -m pip install --group ./python/pyproject.toml:test --no-deps
-          python -m pip install pytest
+          python -m pip install -e ./python --group ./python/pyproject.toml:test
 
       - name: Lint
         run: |
@@ -142,17 +130,15 @@ jobs:
           python -m pip install --group ./python/pyproject.toml:typecheck
           python -m mypy --config-file python/pyproject.toml
 
+      # pyproject's pytest `pythonpath` finds the shared `fancy_conformance`
+      # loader at ../../fancy-conformance/python/src, which is where it sits in
+      # the .agi envelope. Here the checkout is INSIDE the workspace, so that
+      # path does not exist; PYTHONPATH points at the checkout this job made, at
+      # the pinned tag, and the root is set so the fixtures read are that
+      # checkout rather than a guess.
       - name: Test
         working-directory: python
+        env:
+          FANCY_CONFORMANCE_ROOT: ${{ github.workspace }}/.fancy-conformance
+          PYTHONPATH: ${{ github.workspace }}/.fancy-conformance/python/src
         run: python -m pytest -q
-
-      # Proof the bridge above is still needed rather than forgotten. When this
-      # step starts FAILING, `fancy-conformance` is on PyPI and the checkout
-      # step plus `--no-deps` must both come out.
-      - name: The PyPI gap is still open
-        run: |
-          if python -m pip download --no-deps --dest /tmp/probe fancy-conformance >/dev/null 2>&1; then
-            echo "::error::fancy-conformance IS on PyPI now. Remove the source-checkout bridge in this workflow and install it normally."
-            exit 1
-          fi
-          echo "fancy-conformance is still absent from PyPI; the source bridge above is still required." 

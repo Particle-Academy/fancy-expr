@@ -89,6 +89,13 @@ php vendor/bin/pest                        # PHP
 cd python && python -m pytest -q           # Python
 ```
 
+The Python suite gets the shared `fancy_conformance` loader from pytest's
+`pythonpath`, which names the `fancy-conformance` checkout beside this
+repository in the envelope; CI checks out the pinned tag and sets `PYTHONPATH`
+to its `python/src`. It is deliberately in no dependency group:
+`fancy-conformance` is never published to PyPI, so a group entry breaks
+`pip install -e . --group dev`.
+
 All three are required CI jobs. A language whose suite does not run is a
 language whose agreement with the other two is a claim rather than a test
 result -- which is the failure the shared table exists to prevent, and

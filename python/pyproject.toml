@@ -48,7 +48,13 @@ Issues = "https://github.com/Particle-Academy/fancy-expr/issues"
 Source = "https://github.com/Particle-Academy/fancy-expr"
 
 [dependency-groups]
-test = ["pytest>=8.0", "fancy-conformance>=0.16.0,<2.0"]
+# `fancy-conformance` is deliberately NOT a requirement here. It is the suite's
+# internal alignment tool, not a product, and is never published to PyPI, so
+# listing it sent `pip install -e . --group dev` to PyPI for a name that does not
+# exist and failed the whole install. The loader reaches the suite through
+# pytest's `pythonpath` below instead, and CI puts its checkout of the pinned tag
+# on PYTHONPATH.
+test = ["pytest>=8.0"]
 lint = ["ruff>=0.16"]
 typecheck = ["mypy>=1.11"]
 dev = [{ include-group = "test" }, { include-group = "lint" }, { include-group = "typecheck" }]
@@ -64,10 +70,14 @@ include = ["/src", "/tests", "/README.md", "/pyproject.toml", "/LICENSE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# `pythonpath` so the suite runs on a bare checkout with nothing but pytest and
-# the conformance loader, the way `npm test` and `vendor/bin/pest` do for the
-# two peer implementations.
-pythonpath = ["src"]
+# `pythonpath` so the suite runs on a bare checkout with nothing but pytest, the
+# way `npm test` and `vendor/bin/pest` do for the two peer implementations.
+#
+# `../../fancy-conformance/python/src` is the shared fixture loader, from the
+# fancy-conformance checkout beside this repository in the .agi envelope (the
+# path is relative to this python/ directory). CI has no such sibling and sets
+# PYTHONPATH to its own checkout of the pinned tag instead.
+pythonpath = ["src", "../../fancy-conformance/python/src"]
 addopts = "--import-mode=importlib -ra"
 filterwarnings = ["error"]
 
