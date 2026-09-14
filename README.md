@@ -1,5 +1,7 @@
 # fancy-expr
 
+[![Fancified](art/fancified.svg)](https://particle.academy)
+
 A sandboxed expression evaluator with **one grammar and three implementations**
 — TypeScript, PHP and Python — all asserted against the same fixture table.
 
@@ -19,7 +21,7 @@ Three implementations, one table:
 |---|---|
 | TypeScript | `npm i @particle-academy/fancy-expr` |
 | PHP | `composer require particle-academy/fancy-expr` |
-| Python | `pip install fancy-expr` |
+| Python | `pip install fancy-expr` (not on PyPI yet) |
 
 ## The one thing to know
 
