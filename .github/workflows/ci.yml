@@ -13,15 +13,18 @@ permissions:
 # than a test result -- which is the exact failure this package's shared table
 # exists to prevent, and it would be embarrassing to reproduce it here.
 jobs:
-  node:
+  # One gate, stated once, that every installing job waits on. It used to sit
+  # inline in a single job, which meant the other jobs installed unchecked --
+  # a check that finishes beside the thing it guards is a report, not a gate.
+  # Prism raised the distinction 2026-09-21; this repo is polyglot, so the
+  # JS job was gated and the PHP/Python ones were not.
+  allowlist:
+    name: Third-party allowlist
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # The allowlist is FETCHED, never vendored: one source, no copies to
-      # drift. This package has zero runtime dependencies by design -- it is a
-      # sandbox, and every dependency would be code running against expressions
-      # that arrive from end users and from agents over the wire.
+      # The allowlist is FETCHED, never vendored: one source, no copies to drift.
       - name: Fetch the third-party allowlist
         uses: actions/checkout@v4
         with:
@@ -32,10 +35,13 @@ jobs:
       - name: Third-party dependency allowlist
         run: |
           node .third-party-allowlist/third-party/check.mjs --repo .
-          # Delete it. A fetched checkout left in the workspace is not inert --
-          # vitest globbed a checker's own tests out of one and failed a package
-          # whose code was fine.
           node -e "require('node:fs').rmSync('.third-party-allowlist',{recursive:true,force:true})"
+
+  node:
+    needs: allowlist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
@@ -57,6 +63,7 @@ jobs:
         run: npm run build
 
   php:
+    needs: allowlist
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -80,6 +87,7 @@ jobs:
         run: vendor/bin/pest
 
   python:
+    needs: allowlist
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
