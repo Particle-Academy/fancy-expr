@@ -7,6 +7,12 @@ This package is pre-1.0: **breaking changes land in MINOR releases**, so the
 version number is not a compatibility promise until 1.0. Every breaking entry
 says what a consumer has to DO, not merely what moved.
 
+## [Unreleased]
+
+### Fixed
+
+- **`CHANGELOG.md` is now in the published tarball.** `files` did not whitelist it, so npm never shipped it — and this package puts breaking changes in MINOR releases and tells you in the README to read the entry before taking one. The instruction existed for the author, who has the file, and not for the consumer, who is the only one being instructed. Nothing for you to do; the file simply arrives from this release on.
+
 ## [0.1.1] - 2026-08-26
 
 ### Changed

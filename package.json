@@ -21,7 +21,8 @@
   },
   "files": [
     "dist",
-    "GRAMMAR.md"
+    "GRAMMAR.md",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=22"
