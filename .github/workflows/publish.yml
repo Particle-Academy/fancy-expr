@@ -16,11 +16,11 @@ jobs:
     name: Third-party allowlist
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The allowlist is FETCHED, never vendored: one source, no copies to drift.
       - name: Fetch the third-party allowlist
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: Particle-Academy/.github
           path: .third-party-allowlist
@@ -38,7 +38,7 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Release gate: a tag with no CHANGELOG entry fails HERE, before the
       # package reaches the registry. A published version whose changes are
@@ -77,7 +77,7 @@ jobs:
 
           echo "Found changelog entry for ${VERSION}, and it is the newest."
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
@@ -147,10 +147,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions: {}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
 
@@ -192,7 +192,7 @@ jobs:
         run: |
           python -c "import glob,zipfile,sys; n=zipfile.ZipFile(glob.glob('dist/*.whl')[0]).namelist(); ok=any(x.endswith('py.typed') for x in n); print('py.typed in wheel:', ok); sys.exit(0 if ok else 1)"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: python-dists
           path: python/dist/
@@ -206,7 +206,7 @@ jobs:
     permissions:
       id-token: write        # mandatory for Trusted Publishing; there is no token
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: python-dists
           path: dist/
