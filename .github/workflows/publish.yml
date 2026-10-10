@@ -15,6 +15,15 @@ jobs:
   allowlist:
     name: Third-party allowlist
     runs-on: ubuntu-latest
+    # The only job here that lacked a cap (CodeQL
+    # `actions/missing-workflow-permissions`, alert #2). It reads this repo and
+    # fetches the allowlist with `persist-credentials: false`, so reading code is
+    # all it needs. Capped per job rather than workflow-wide ON PURPOSE: the two
+    # publishing jobs need `id-token: write` for Trusted Publishing, and a
+    # workflow-level `contents: read` here would read as the safe choice while
+    # breaking every release.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
 

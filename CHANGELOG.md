@@ -15,6 +15,14 @@ says what a consumer has to DO, not merely what moved.
 
 ### Security
 
+- **The `allowlist` job in `publish.yml` now caps its token to
+  `contents: read`.** It was the only job in that file without a
+  `permissions:` block, so it inherited the repository default (CodeQL
+  `actions/missing-workflow-permissions`, alert #2). Capped PER JOB rather than
+  workflow-wide on purpose: the npm and PyPI jobs need `id-token: write` for
+  Trusted Publishing, and a workflow-level `contents: read` would have read as
+  the safe choice while breaking every release. **Nothing for a consumer to do.**
+
 - `source-map-js` is pinned forward to `^1.2.2` via `overrides`. Versions up to
   1.2.1 allow an event-loop denial of service through indexed source-map section
   offsets, and it arrives here transitively through the build toolchain.
