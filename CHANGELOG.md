@@ -15,6 +15,8 @@ says what a consumer has to DO, not merely what moved.
 
 ### Security
 
+- Update Vitest to 4.1.12 for security fixes; dev toolchain only, nothing to do.
+
 - **The `allowlist` job in `publish.yml` now caps its token to
   `contents: read`.** It was the only job in that file without a
   `permissions:` block, so it inherited the repository default (CodeQL
