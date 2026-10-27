@@ -24,6 +24,19 @@ final class Expr
         '?', ':', '.', ',', '(', ')', '[', ']', '{', '}', '+', '-', '*', '/', '<', '>', '!',
     ];
 
+    /** Longest accepted expression, in UTF-8 bytes. Inclusive. */
+    public const MAX_EXPRESSION_BYTES = 8192;
+
+    /**
+     * Deepest accepted expression, by GRAMMAR.md's definition. Inclusive.
+     *
+     * Enforced twice against ONE definition: on the way down ({@see child()}),
+     * so no input recurses past the limit before the parser knows; and on the
+     * way up ({@see finish()}), because a binary chain is built in a loop but
+     * makes a left-deep tree the evaluator recurses through.
+     */
+    public const MAX_EXPRESSION_DEPTH = 64;
+
     /**
      * Parse and evaluate. Throws {@see ExprSyntaxError} if it cannot parse.
      *
@@ -45,8 +58,22 @@ final class Expr
      */
     public static function parse(string $source): array
     {
+        // GRAMMAR.md "Limits". Length FIRST, before a token is read (expr/limits
+        // 0005). strlen() is bytes, which is the unit the grammar specifies --
+        // the one place PHP's native length is already the right answer.
+        if (strlen($source) > self::MAX_EXPRESSION_BYTES) {
+            throw new ExprSyntaxError(
+                sprintf('Expression too long: the limit is %d UTF-8 bytes', self::MAX_EXPRESSION_BYTES),
+                $source,
+                0,
+                'EXPR_TOO_LONG',
+            );
+        }
+
         $tokens = self::tokenize($source);
-        $state = ['tokens' => $tokens, 'i' => 0, 'source' => $source];
+        // `nest`: constructs enclosing the point being parsed. `depth`: depth of
+        // the node most recently FINISHED, read by its parent straight after.
+        $state = ['tokens' => $tokens, 'i' => 0, 'source' => $source, 'nest' => 0, 'depth' => 0];
 
         // An empty expression is malformed, not null. `{{ }}` says nothing, and
         // producing a value for it would be the same class of guess this package
@@ -359,17 +386,103 @@ final class Expr
      * @param  array<string,mixed>  $s
      * @return array<string,mixed>
      */
+    /** @param  array<string,mixed>  $s */
+    private static function tooDeep(array $s): ExprSyntaxError
+    {
+        return new ExprSyntaxError(
+            sprintf('Expression nested too deeply: %d levels is the limit', self::MAX_EXPRESSION_DEPTH),
+            $s['source'],
+            $s['tokens'][$s['i']]['at'],
+            'EXPR_TOO_DEEP',
+        );
+    }
+
+    /**
+     * Parse a CHILD of a construct. `nest` then counts every enclosing construct
+     * including the parent, and the child is at least one level itself -- so
+     * once `nest` reaches the limit the finished tree must exceed it, and
+     * refusing now is the verdict finish() would reach, minus the recursion.
+     *
+     * @param  array<string,mixed>  $s
+     * @param  callable(array<string,mixed>&): array<string,mixed>  $parse
+     * @return array<string,mixed>
+     */
+    private static function child(array &$s, callable $parse): array
+    {
+        $s['nest']++;
+        try {
+            if ($s['nest'] >= self::MAX_EXPRESSION_DEPTH) {
+                throw self::tooDeep($s);
+            }
+
+            return $parse($s);
+        } finally {
+            $s['nest']--;
+        }
+    }
+
+    /**
+     * Record a finished node's depth, refusing it past the limit.
+     *
+     * @param  array<string,mixed>  $s
+     * @param  array<string,mixed>  $node
+     * @return array<string,mixed>
+     */
+    private static function finish(array &$s, array $node, int $depth): array
+    {
+        if ($depth > self::MAX_EXPRESSION_DEPTH) {
+            throw self::tooDeep($s);
+        }
+        $s['depth'] = $depth;
+
+        return $node;
+    }
+
+    /**
+     * @param  array<string,mixed>  $s
+     * @return array<string,mixed>
+     */
     private static function parseTernary(array &$s): array
     {
         $test = self::parseOr($s);
         if (! self::eat($s, '?')) {
             return $test;
         }
+        $testDepth = $s['depth'];
 
-        $then = self::parseTernary($s);
+        $then = self::child($s, self::parseTernary(...));
+        $thenDepth = $s['depth'];
         self::expect($s, ':');
+        $other = self::child($s, self::parseTernary(...));
 
-        return ['kind' => 'ternary', 'test' => $test, 'then' => $then, 'other' => self::parseTernary($s)];
+        return self::finish(
+            $s,
+            ['kind' => 'ternary', 'test' => $test, 'then' => $then, 'other' => $other],
+            1 + max($testDepth, $thenDepth, $s['depth']),
+        );
+    }
+
+    /**
+     * One left-associative level. A LOOP, never recursion -- but each operator
+     * wraps everything to its left, so a long chain is a deep tree.
+     *
+     * @param  array<string,mixed>  $s
+     * @param  callable(array<string,mixed>&): array<string,mixed>  $operand
+     * @param  callable(string, array<string,mixed>, array<string,mixed>): array<string,mixed>  $build
+     * @return array<string,mixed>
+     */
+    private static function chain(array &$s, callable $operand, callable $build, string ...$ops): array
+    {
+        $left = $operand($s);
+        while (self::isPunct($s, ...$ops)) {
+            $raw = (string) $s['tokens'][$s['i']]['value'];
+            $s['i']++;
+            $leftDepth = $s['depth'];
+            $right = $operand($s);
+            $left = self::finish($s, $build($raw, $left, $right), 1 + max($leftDepth, $s['depth']));
+        }
+
+        return $left;
     }
 
     /**
@@ -378,13 +491,12 @@ final class Expr
      */
     private static function parseOr(array &$s): array
     {
-        $left = self::parseAnd($s);
-        while (self::isPunct($s, '||')) {
-            $s['i']++;
-            $left = ['kind' => 'logical', 'op' => '||', 'left' => $left, 'right' => self::parseAnd($s)];
-        }
-
-        return $left;
+        return self::chain(
+            $s,
+            self::parseAnd(...),
+            static fn (string $op, array $l, array $r): array => ['kind' => 'logical', 'op' => '||', 'left' => $l, 'right' => $r],
+            '||',
+        );
     }
 
     /**
@@ -393,13 +505,12 @@ final class Expr
      */
     private static function parseAnd(array &$s): array
     {
-        $left = self::parseEquality($s);
-        while (self::isPunct($s, '&&')) {
-            $s['i']++;
-            $left = ['kind' => 'logical', 'op' => '&&', 'left' => $left, 'right' => self::parseEquality($s)];
-        }
-
-        return $left;
+        return self::chain(
+            $s,
+            self::parseEquality(...),
+            static fn (string $op, array $l, array $r): array => ['kind' => 'logical', 'op' => '&&', 'left' => $l, 'right' => $r],
+            '&&',
+        );
     }
 
     /**
@@ -408,19 +519,18 @@ final class Expr
      */
     private static function parseEquality(array &$s): array
     {
-        $left = self::parseComparison($s);
-        while (self::isPunct($s, '===', '==', '!==', '!=')) {
-            // `==` and `===` collapse to ONE operator, and neither coerces
-            // (rows 0501-0503). PHP's own `==` is the trap here: `'3' == 3` is
-            // true natively, and a runtime that inherited that would disagree
-            // with its twins on a shape authors write constantly.
-            $raw = (string) $s['tokens'][$s['i']]['value'];
-            $s['i']++;
-            $op = str_starts_with($raw, '!') ? '!==' : '===';
-            $left = ['kind' => 'binary', 'op' => $op, 'left' => $left, 'right' => self::parseComparison($s)];
-        }
-
-        return $left;
+        // `==` and `===` collapse to ONE operator, and neither coerces
+        // (rows 0501-0503). PHP's own `==` is the trap here: `'3' == 3` is
+        // true natively, and a runtime that inherited that would disagree
+        // with its twins on a shape authors write constantly.
+        return self::chain(
+            $s,
+            self::parseComparison(...),
+            static fn (string $raw, array $l, array $r): array => [
+                'kind' => 'binary', 'op' => str_starts_with($raw, '!') ? '!==' : '===', 'left' => $l, 'right' => $r,
+            ],
+            '===', '==', '!==', '!=',
+        );
     }
 
     /**
@@ -429,14 +539,7 @@ final class Expr
      */
     private static function parseComparison(array &$s): array
     {
-        $left = self::parseAdditive($s);
-        while (self::isPunct($s, '<', '<=', '>', '>=')) {
-            $op = (string) $s['tokens'][$s['i']]['value'];
-            $s['i']++;
-            $left = ['kind' => 'binary', 'op' => $op, 'left' => $left, 'right' => self::parseAdditive($s)];
-        }
-
-        return $left;
+        return self::chain($s, self::parseAdditive(...), self::binaryNode(...), '<', '<=', '>', '>=');
     }
 
     /**
@@ -445,14 +548,7 @@ final class Expr
      */
     private static function parseAdditive(array &$s): array
     {
-        $left = self::parseMultiplicative($s);
-        while (self::isPunct($s, '+', '-')) {
-            $op = (string) $s['tokens'][$s['i']]['value'];
-            $s['i']++;
-            $left = ['kind' => 'binary', 'op' => $op, 'left' => $left, 'right' => self::parseMultiplicative($s)];
-        }
-
-        return $left;
+        return self::chain($s, self::parseMultiplicative(...), self::binaryNode(...), '+', '-');
     }
 
     /**
@@ -461,14 +557,17 @@ final class Expr
      */
     private static function parseMultiplicative(array &$s): array
     {
-        $left = self::parseUnary($s);
-        while (self::isPunct($s, '*', '/')) {
-            $op = (string) $s['tokens'][$s['i']]['value'];
-            $s['i']++;
-            $left = ['kind' => 'binary', 'op' => $op, 'left' => $left, 'right' => self::parseUnary($s)];
-        }
+        return self::chain($s, self::parseUnary(...), self::binaryNode(...), '*', '/');
+    }
 
-        return $left;
+    /**
+     * @param  array<string,mixed>  $l
+     * @param  array<string,mixed>  $r
+     * @return array<string,mixed>
+     */
+    private static function binaryNode(string $op, array $l, array $r): array
+    {
+        return ['kind' => 'binary', 'op' => $op, 'left' => $l, 'right' => $r];
     }
 
     /**
@@ -480,8 +579,9 @@ final class Expr
         if (self::isPunct($s, '!', '-')) {
             $op = (string) $s['tokens'][$s['i']]['value'];
             $s['i']++;
+            $operand = self::child($s, self::parseUnary(...));
 
-            return ['kind' => 'unary', 'op' => $op, 'operand' => self::parseUnary($s)];
+            return self::finish($s, ['kind' => 'unary', 'op' => $op, 'operand' => $operand], 1 + $s['depth']);
         }
 
         return self::parsePrimary($s);
@@ -498,7 +598,7 @@ final class Expr
         if ($t['type'] === 'number' || $t['type'] === 'string') {
             $s['i']++;
 
-            return ['kind' => 'literal', 'value' => $t['value']];
+            return self::finish($s, ['kind' => 'literal', 'value' => $t['value']], 1);
         }
 
         if ($t['type'] === 'ident') {
@@ -506,33 +606,38 @@ final class Expr
             if ($name === 'true' || $name === 'false' || $name === 'null') {
                 $s['i']++;
 
-                return ['kind' => 'literal', 'value' => $name === 'null' ? null : $name === 'true'];
+                return self::finish($s, ['kind' => 'literal', 'value' => $name === 'null' ? null : $name === 'true'], 1);
             }
 
             return self::parsePath($s);
         }
 
         if (self::eat($s, '(')) {
-            $inner = self::parseTernary($s);
+            // A group leaves no node but IS a level: the parser recurses through
+            // it, and recursion is what the limit bounds (expr/limits 0102).
+            $inner = self::child($s, self::parseTernary(...));
             self::expect($s, ')');
 
-            return $inner;
+            return self::finish($s, $inner, 1 + $s['depth']);
         }
 
         if (self::eat($s, '[')) {
             $items = [];
+            $deepest = 0;
             if (! self::isPunct($s, ']')) {
                 do {
-                    $items[] = self::parseTernary($s);
+                    $items[] = self::child($s, self::parseTernary(...));
+                    $deepest = max($deepest, $s['depth']);
                 } while (self::eat($s, ','));
             }
             self::expect($s, ']');
 
-            return ['kind' => 'array', 'items' => $items];
+            return self::finish($s, ['kind' => 'array', 'items' => $items], 1 + $deepest);
         }
 
         if (self::eat($s, '{')) {
             $entries = [];
+            $deepest = 0;
             if (! self::isPunct($s, '}')) {
                 do {
                     $k = $s['tokens'][$s['i']];
@@ -541,12 +646,13 @@ final class Expr
                     }
                     $s['i']++;
                     self::expect($s, ':');
-                    $entries[] = ['key' => (string) $k['value'], 'value' => self::parseTernary($s)];
+                    $entries[] = ['key' => (string) $k['value'], 'value' => self::child($s, self::parseTernary(...))];
+                    $deepest = max($deepest, $s['depth']);
                 } while (self::eat($s, ','));
             }
             self::expect($s, '}');
 
-            return ['kind' => 'object', 'entries' => $entries];
+            return self::finish($s, ['kind' => 'object', 'entries' => $entries], 1 + $deepest);
         }
 
         throw new ExprSyntaxError(
@@ -566,6 +672,9 @@ final class Expr
         $head = $s['tokens'][$s['i']];
         $s['i']++;
         $segments[] = ['name' => (string) $head['value']];
+        // Dot-segments nest nothing (expr/limits 0801); only a computed index
+        // is a nested expression.
+        $deepest = 0;
 
         for (;;) {
             if (self::eat($s, '.')) {
@@ -580,7 +689,8 @@ final class Expr
             }
 
             if (self::eat($s, '[')) {
-                $idx = self::parseTernary($s);
+                $idx = self::child($s, self::parseTernary(...));
+                $deepest = max($deepest, $s['depth']);
                 self::expect($s, ']');
                 $segments[] = ['expr' => $idx];
 
@@ -598,7 +708,7 @@ final class Expr
                 );
             }
 
-            return ['kind' => 'path', 'segments' => $segments];
+            return self::finish($s, ['kind' => 'path', 'segments' => $segments], 1 + $deepest);
         }
     }
 

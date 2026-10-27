@@ -9,6 +9,38 @@ says what a consumer has to DO, not merely what moved.
 
 ## [Unreleased]
 
+### Added
+
+- **Every parse failure carries a stable code**: `EXPR_SYNTAX`, `EXPR_TOO_LONG`
+  or `EXPR_TOO_DEEP` -- `ExprSyntaxError.code` in TypeScript and Python,
+  `ExprSyntaxError::$errorCode` in PHP (Exception already owns an integer
+  `$code`). Branch on the code; the message may change. The limits are exported
+  as `MAX_EXPRESSION_BYTES` (8192) and `MAX_EXPRESSION_DEPTH` (64), and
+  `ExprErrorCode` as a type in TypeScript and Python.
+
+### Security
+
+- **Input length and nesting depth are now bounded** (GRAMMAR.md "Limits",
+  conformance suite `expr/limits`). The parser is recursive descent and had no
+  bound, so `((((...` from an end user or an agent overflowed the stack:
+  4000 nested parentheses -- 8001 bytes -- threw `RangeError` in Node and
+  `RecursionError` in Python, and a 4000-term sum parsed fine and then
+  overflowed while being EVALUATED. Neither is `ExprSyntaxError`, so a host
+  validating expressions at save time crashed instead of refusing. PHP's stack
+  happened to hold at that size. Now an expression over 8192 UTF-8 bytes is
+  `EXPR_TOO_LONG` (checked before tokenizing) and one deeper than 64 levels is
+  `EXPR_TOO_DEEP` (checked during parsing, before the recursion that would
+  overflow). Messages no longer quote more than 120 characters of the
+  expression.
+
+  **Possibly breaking, and what to do:** an expression over 8 KiB or nested past
+  64 levels that used to evaluate now throws `ExprSyntaxError`, which every
+  caller already handles as "invalid". Nothing realistic is that deep -- 64
+  levels is 63 nested parentheses or a 64-term `+` chain -- so unless you
+  generate expressions mechanically, do nothing. If you do, keep a generated
+  `+` chain under 64 terms. `ExprSyntaxError`'s constructor gained an optional
+  trailing parameter; existing calls are unaffected.
+
 ### Fixed
 
 - **`CHANGELOG.md` is now in the published tarball.** `files` did not whitelist it, so npm never shipped it — and this package puts breaking changes in MINOR releases and tells you in the README to read the entry before taking one. The instruction existed for the author, who has the file, and not for the consumer, who is the only one being instructed. Nothing for you to do; the file simply arrives from this release on.

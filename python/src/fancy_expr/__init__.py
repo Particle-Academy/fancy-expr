@@ -23,11 +23,14 @@ from agents, over the wire.
 """
 
 from ._evaluate import evaluate, evaluate_node, truthy
-from ._parse import parse
+from ._parse import MAX_EXPRESSION_BYTES, MAX_EXPRESSION_DEPTH, parse
 from ._references import references
-from ._tokenize import ExprSyntaxError, tokenize
+from ._tokenize import ExprErrorCode, ExprSyntaxError, tokenize
 
 __all__ = [
+    "MAX_EXPRESSION_BYTES",
+    "MAX_EXPRESSION_DEPTH",
+    "ExprErrorCode",
     "ExprSyntaxError",
     "evaluate",
     "evaluate_node",

@@ -17,4 +17,6 @@
  * being the same value is the reason this package exists.
  */
 export { evaluate, evaluateNode, truthy, parse, ExprSyntaxError, type Node } from "./evaluate";
+export { MAX_EXPRESSION_BYTES, MAX_EXPRESSION_DEPTH } from "./parse";
+export type { ExprErrorCode } from "./tokenize";
 export { references } from "./references";

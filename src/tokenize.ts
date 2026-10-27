@@ -21,14 +21,33 @@ export type Token = {
   at: number;
 };
 
+/**
+ * The stable reason an expression was refused. The MESSAGE is for people and
+ * may change; the code may not. Pinned by `expr/limits` in fancy-conformance.
+ */
+export type ExprErrorCode = "EXPR_SYNTAX" | "EXPR_TOO_LONG" | "EXPR_TOO_DEEP";
+
+/** Longest expression quoted back in a message; longer ones are elided. */
+const QUOTE_LIMIT = 120;
+
 /** Thrown for anything that cannot be tokenized or parsed. NEVER returned. */
 export class ExprSyntaxError extends Error {
   constructor(
     message: string,
     readonly expression: string,
     readonly at: number,
+    readonly code: ExprErrorCode = "EXPR_SYNTAX",
   ) {
-    super(`${message} (at offset ${at} in \`${expression}\`)`);
+    // Quoted back for the author, but never in full past QUOTE_LIMIT: an
+    // expression refused for being 8 KiB should not produce an 8 KiB message.
+    let quoted = expression;
+    if (expression.length > QUOTE_LIMIT) {
+      // Never split a surrogate pair, so the message stays well-formed.
+      const high = expression.charCodeAt(QUOTE_LIMIT - 1);
+      const cut = high >= 0xd800 && high <= 0xdbff ? QUOTE_LIMIT - 1 : QUOTE_LIMIT;
+      quoted = `${expression.slice(0, cut)}...`;
+    }
+    super(`${message} (at offset ${at} in \`${quoted}\`)`);
     this.name = "ExprSyntaxError";
   }
 }

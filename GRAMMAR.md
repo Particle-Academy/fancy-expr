@@ -176,6 +176,63 @@ Parsing is separable from evaluation precisely so a host can ask *"is this
 expression valid?"* without any data — which is what makes a node with a broken
 expression rejectable at **save** time rather than discovered at run time.
 
+Every failure carries a stable **code** beside its message: `EXPR_SYNTAX` for
+anything malformed, and the two limit codes below. The message is for people and
+may change; the code may not. (`ExprSyntaxError.code` in TypeScript and Python;
+`ExprSyntaxError::$errorCode` in PHP, because `Exception` already owns an
+integer `$code`.) Pinned by `expr/limits` in `fancy-conformance`, since 0.35.0.
+
+## Limits
+
+Expressions arrive from end users and from agents, so every input is bounded.
+Both limits are fixed in this version, the same in every runtime, and inclusive.
+
+| limit | value | code |
+|---|---|---|
+| length | **8192 UTF-8 bytes** | `EXPR_TOO_LONG` |
+| nesting depth | **64** | `EXPR_TOO_DEEP` |
+
+**Length is UTF-8 bytes**, not the runtime's native string length: JavaScript
+counts UTF-16 units, Python code points and PHP bytes, and a bound measured
+three ways is three bounds. A lone surrogate counts 3 bytes. Length is checked
+**before tokenizing**, so an oversized input of any content is `EXPR_TOO_LONG`.
+
+**Depth** is defined on the syntax, bottom-up:
+
+```
+depth(literal)                 = 1
+depth(path)                    = 1 + max(depth of each [index] expression), or 1
+depth(unary op e)              = 1 + depth(e)
+depth(l op r)                  = 1 + max(depth(l), depth(r))      -- binary and logical
+depth(t ? a : b)               = 1 + max(depth(t), depth(a), depth(b))
+depth([e, ...])  depth({k: e}) = 1 + max(depth of each item/value), or 1 when empty
+depth( "(" e ")" )             = 1 + depth(e)
+```
+
+Three consequences, each a conformance row:
+
+- **A parenthesised group is a level** even though it leaves no node in the
+  tree, because the parser recurses through it. `(((1)))` is depth 4.
+- **A binary chain is deep.** `1+1+...+1` with 65 terms is depth 65. It parses
+  in a loop, but builds a left-deep tree that every evaluator here walks
+  recursively.
+- **Dot-segments and width are not.** `a.b.c...` is depth 1 however long, and a
+  1000-item array literal is depth 2. Both are bounded by length instead.
+
+**Depth is enforced during parsing, not after.** An implementation refuses as
+soon as it is known the limit will be exceeded: when about to parse a child of a
+construct that already has 64 enclosing constructs (counting itself), and when
+any finished node's depth exceeds 64. Both checks measure the definition above,
+so the verdict is the same whichever fires first. The first exists because
+`((((...` must be refused without the recursion that would overflow the stack,
+so 8000 unclosed parentheses are `EXPR_TOO_DEEP`, not `EXPR_SYNTAX`.
+
+Why this exists: through 0.1.1 there was no bound. 4000 nested parentheses fit in
+8001 bytes and threw `RangeError` in Node and `RecursionError` in Python --
+neither of them `ExprSyntaxError`, so a host validating expressions at save time
+crashed instead of refusing. A host wanting a tighter bound (fancy-template caps
+a token at 512 bytes) applies it before calling in.
+
 ## What an expression READS — `references()`
 
 `references(expression)` returns the **root identifiers** an expression needs,

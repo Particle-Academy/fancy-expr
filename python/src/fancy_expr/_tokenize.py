@@ -49,6 +49,11 @@ _IDENT_REST = _IDENT_START | set("0123456789")
 _DIGITS = set("0123456789")
 
 
+ExprErrorCode = Literal["EXPR_SYNTAX", "EXPR_TOO_LONG", "EXPR_TOO_DEEP"]
+
+_QUOTE_LIMIT = 120
+
+
 class ExprSyntaxError(ValueError):
     """A malformed expression.
 
@@ -59,10 +64,25 @@ class ExprSyntaxError(ValueError):
     workflow took the wrong road on every run while reporting success.
     """
 
-    def __init__(self, message: str, offset: int, expression: str) -> None:
-        super().__init__(f"{message} (at offset {offset} in {expression!r})")
+    def __init__(
+        self,
+        message: str,
+        offset: int,
+        expression: str,
+        code: ExprErrorCode = "EXPR_SYNTAX",
+    ) -> None:
+        # Quoted back for the author, never in full: an expression refused for
+        # being 8 KiB should not produce an 8 KiB message.
+        quoted = expression
+        if len(expression) > _QUOTE_LIMIT:
+            quoted = expression[:_QUOTE_LIMIT] + "..."
+        super().__init__(f"{message} (at offset {offset} in {quoted!r})")
         self.offset = offset
         self.expression = expression
+        #: The stable reason -- EXPR_SYNTAX, EXPR_TOO_LONG or EXPR_TOO_DEEP,
+        #: pinned by ``expr/limits`` in fancy-conformance. The message is for
+        #: people and may change; the code may not.
+        self.code: ExprErrorCode = code
 
 
 @dataclass(frozen=True, slots=True)
