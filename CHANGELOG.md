@@ -9,6 +9,8 @@ says what a consumer has to DO, not merely what moved.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-27
+
 ### Added
 
 - **Every parse failure carries a stable code**: `EXPR_SYNTAX`, `EXPR_TOO_LONG`
@@ -25,6 +27,10 @@ says what a consumer has to DO, not merely what moved.
   `expr/limits` table (27 rows) from the pinned package -- 27/27 in TypeScript,
   PHP and Python. `expr/evaluate` and `expr/references` are unchanged at
   0.35.0. Nothing a consumer installs changes; do nothing.
+
+### Fixed
+
+- **`CHANGELOG.md` is now in the published tarball.** `files` did not whitelist it, so npm never shipped it — and this package puts breaking changes in MINOR releases and tells you in the README to read the entry before taking one. The instruction existed for the author, who has the file, and not for the consumer, who is the only one being instructed. Nothing for you to do; the file simply arrives from this release on.
 
 ### Security
 
@@ -48,12 +54,6 @@ says what a consumer has to DO, not merely what moved.
   generate expressions mechanically, do nothing. If you do, keep a generated
   `+` chain under 64 terms. `ExprSyntaxError`'s constructor gained an optional
   trailing parameter; existing calls are unaffected.
-
-### Fixed
-
-- **`CHANGELOG.md` is now in the published tarball.** `files` did not whitelist it, so npm never shipped it — and this package puts breaking changes in MINOR releases and tells you in the README to read the entry before taking one. The instruction existed for the author, who has the file, and not for the consumer, who is the only one being instructed. Nothing for you to do; the file simply arrives from this release on.
-
-### Security
 
 - Update Vitest to 4.1.12 for security fixes; dev toolchain only, nothing to do.
 
