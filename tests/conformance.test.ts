@@ -13,6 +13,7 @@
  */
 import { describe, expect, it } from "vitest";
 import CASES from "@particle-academy/fancy-conformance/suites/expr/evaluate/cases.json" with { type: "json" };
+import LIMIT_CASES from "@particle-academy/fancy-conformance/suites/expr/limits/cases.json" with { type: "json" };
 import { formatSummary, runTable, suiteVersion } from "@particle-academy/fancy-conformance";
 import COMPOSER from "../composer.json" with { type: "json" };
 import PACKAGE from "../package.json" with { type: "json" };
@@ -34,13 +35,20 @@ import { evaluate, ExprSyntaxError } from "../src/index";
  * re-run against 0.22.1 in every runtime first all the same, with the counts
  * above unchanged: expr/evaluate 49 (PHP 48 + the 0904 skip), expr/references 12.
  *
+ * Moved 0.22.1 -> 0.35.0 on 2026-10-27, to run `expr/limits` (new in 0.35.0:
+ * 27 rows, the GRAMMAR.md "Limits" bounds and their stable error codes) from
+ * the pinned package instead of only from per-language copies. 0.35.0 changed
+ * no expr/evaluate or expr/references case; both were re-run against it in
+ * every runtime BEFORE the pin moved, unchanged: expr/evaluate 49 (PHP 48 + the
+ * 0904 skip), expr/references 12. expr/limits then ran 27/27 in every runtime.
+ *
  * Moved deliberately, never automatically: a pin that follows disk asserts
  * nothing. Moving it means package.json + package-lock.json, composer.json's
  * EXACT require-dev constraint, PINNED_SUITE_VERSION here and in
  * php/tests/ConformanceTest.php, and python/tests/test_conformance.py together
  * with its CI checkout ref -- the tests on every side fail until all agree.
  */
-const PINNED_SUITE_VERSION = "0.22.1";
+const PINNED_SUITE_VERSION = "0.35.0";
 
 describe("the pinned fixture set", () => {
   it("is the one installed, printed and asserted", () => {
@@ -114,6 +122,56 @@ describe("expr/evaluate", () => {
       }
 
       expect(evaluate(c.input.expression, c.input.context)).toEqual(c.expected.value);
+    });
+  }
+});
+
+type LimitCase = {
+  id: string;
+  title: string;
+  skip?: Record<string, string>;
+  input: { expression: string; context: Record<string, unknown> };
+  expected: { ok: true; value: unknown } | { ok: false; code: string };
+};
+
+const limitCases = (LIMIT_CASES as { cases: LimitCase[] }).cases;
+
+/**
+ * `expr/limits` -- the same evaluate(), with the failure side carrying the
+ * error's stable CODE, so "too long" and "too deep" cannot pass as an ordinary
+ * syntax error (or a crash) does. tests/limits.test.ts keeps the probes this
+ * table cannot express.
+ */
+function runLimitCase(input: LimitCase["input"]): unknown {
+  try {
+    return { ok: true, value: evaluate(input.expression, input.context) };
+  } catch (error) {
+    if (error instanceof ExprSyntaxError) return { ok: false, code: error.code };
+    throw error;
+  }
+}
+
+describe("expr/limits", () => {
+  it("loaded the shared table", () => {
+    // Vacuity guard, as above.
+    expect(limitCases.length).toBeGreaterThan(20);
+  });
+
+  it("prints the table summary, skips and all", () => {
+    const summary = runTable("expr/limits", (c) => runLimitCase(c.input as LimitCase["input"]), {
+      language: "node",
+    });
+
+    console.info(`\n${formatSummary(summary)}`);
+    expect(summary.ok, formatSummary(summary)).toBe(true);
+    expect(summary.passed + summary.skipped).toBe(limitCases.length);
+  });
+
+  for (const c of limitCases) {
+    const runner = c.skip?.node ? it.skip : it;
+
+    runner(`${c.id} — ${c.title}`, () => {
+      expect(runLimitCase(c.input)).toEqual(c.expected);
     });
   }
 });

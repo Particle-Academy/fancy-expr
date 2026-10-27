@@ -33,6 +33,13 @@ from fancy_expr import ExprSyntaxError, evaluate, truthy
 # re-run against a v0.22.1 checkout first all the same: expr/evaluate 49,
 # expr/references 12, nothing failed or skipped, unchanged.
 #
+# Moved 0.22.1 -> 0.35.0 on 2026-10-27, to run `expr/limits` (new in 0.35.0,
+# 27 rows) from the pinned checkout -- test_matches_the_limits_table below.
+# 0.35.0 changed no expr/evaluate or expr/references case; both were re-run
+# against a v0.35.0 checkout BEFORE the pin moved: expr/evaluate 49,
+# expr/references 12, nothing failed or skipped, unchanged. expr/limits: 27
+# passed.
+#
 # The Node and PHP jobs get the fixtures from npm and Packagist, and pin the SAME
 # version there: package.json's range plus the committed lockfile for Node, an
 # exact require-dev constraint for PHP. php/tests/ConformanceTest.php fails if
@@ -40,7 +47,7 @@ from fancy_expr import ExprSyntaxError, evaluate, truthy
 # `ref: v<this>` in .github/workflows/ci.yml. Move all of them together, and only
 # after re-running the tables in every runtime;
 # test_ci_checks_out_the_fixture_tag_this_suite_pins fails otherwise.
-PINNED_SUITE_VERSION = "0.22.1"
+PINNED_SUITE_VERSION = "0.35.0"
 
 
 def test_the_pinned_fixture_version_is_the_one_on_disk(
@@ -162,6 +169,33 @@ def test_matches_the_table_on_every_case(capsys: pytest.CaptureFixture[str]) -> 
     # The vacuity floor. A suite that loaded nothing reports zero failures too,
     # and reads exactly as green in a CI log.
     assert summary["passed"] > 40
+
+
+def run_limit_case(case: dict[str, Any]) -> dict[str, Any]:
+    """`expr/limits`: the same evaluate(), with the failure carrying its stable code.
+
+    test_limits.py keeps the probes this table cannot express.
+    """
+    try:
+        value = evaluate(case["input"]["expression"], case["input"].get("context") or {})
+    except ExprSyntaxError as error:
+        return {"ok": False, "code": error.code}
+
+    return {"ok": True, "value": value}
+
+
+def test_matches_the_limits_table(capsys: pytest.CaptureFixture[str]) -> None:
+    summary = run_table("expr/limits", run_limit_case)
+
+    with capsys.disabled():
+        print("\n" + format_summary(summary))
+
+    failures = [r["id"] for r in summary["results"] if r["status"] == "fail"]
+    assert failures == [], f"Python disagrees with the shared limits on: {', '.join(failures)}"
+    assert summary["failed"] == 0
+
+    # The vacuity floor.
+    assert summary["passed"] > 20
 
 
 def test_resists_what_python_would_natively_do() -> None:

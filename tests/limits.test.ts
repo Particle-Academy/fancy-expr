@@ -1,10 +1,13 @@
 /**
  * The input bounds, from GRAMMAR.md "Limits".
  *
- * The authoritative rows are `expr/limits` in fancy-conformance (since 0.35.0).
- * This file's pin is still 0.22.1, which predates that suite, so the same
- * boundaries are asserted here directly until the pin moves; when it does, the
- * table becomes the assertion and these stay as the per-language probes.
+ * The authoritative rows are `expr/limits` in fancy-conformance (since 0.35.0),
+ * and this repository pins 0.35.0: tests/conformance.test.ts runs all 27 of
+ * them from the pinned package. This file keeps the per-language probes the
+ * table cannot express -- the exported constants, the message not quoting an
+ * oversized expression, and references() hitting the same bounds -- plus a
+ * direct copy of the boundary checks, so a limit regression names itself here
+ * as well as by case id.
  *
  * Every limit is asserted from BOTH sides: refusing everything long or nested
  * would pass the out-of-limit half alone.

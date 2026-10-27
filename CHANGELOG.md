@@ -18,6 +18,14 @@ says what a consumer has to DO, not merely what moved.
   as `MAX_EXPRESSION_BYTES` (8192) and `MAX_EXPRESSION_DEPTH` (64), and
   `ExprErrorCode` as a type in TypeScript and Python.
 
+### Changed
+
+- **Tests only:** the pinned fancy-conformance fixture set moved 0.22.1 ->
+  0.35.0 in all three legs, and each leg's conformance test now runs the
+  `expr/limits` table (27 rows) from the pinned package -- 27/27 in TypeScript,
+  PHP and Python. `expr/evaluate` and `expr/references` are unchanged at
+  0.35.0. Nothing a consumer installs changes; do nothing.
+
 ### Security
 
 - **Input length and nesting depth are now bounded** (GRAMMAR.md "Limits",

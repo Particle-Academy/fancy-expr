@@ -8,11 +8,14 @@ use FancyExpr\ExprSyntaxError;
 /*
  * The input bounds, from GRAMMAR.md "Limits".
  *
- * The authoritative rows are `expr/limits` in fancy-conformance (since 0.35.0).
- * This repository still pins 0.22.1, which predates that suite, so the same
- * boundaries are asserted here directly until the pin moves. Every limit is
- * asserted from BOTH sides: refusing everything long or nested would pass the
- * out-of-limit half alone.
+ * The authoritative rows are `expr/limits` in fancy-conformance (since 0.35.0),
+ * and this repository pins 0.35.0: ConformanceTest.php runs all 27 of them from
+ * the pinned package. This file keeps the probes the table cannot express --
+ * the exported constants, the message not quoting an oversized expression, and
+ * references() hitting the same bounds -- plus a direct copy of the boundary
+ * checks, so a limit regression names itself here as well as by case id. Every
+ * limit is asserted from BOTH sides: refusing everything long or nested would
+ * pass the out-of-limit half alone.
  */
 
 function limitCode(string $expression, array $context = []): string

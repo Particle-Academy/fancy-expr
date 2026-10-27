@@ -43,8 +43,14 @@ use ParticleAcademy\Conformance\Conformance;
  * Moved 0.22.0 -> 0.22.1 on 2026-09-13. That release changed no case and no
  * golden; both tables were re-run here against 0.22.1 first all the same:
  * expr/evaluate 48 (+1 documented skip, 0904), expr/references 12, unchanged.
+ *
+ * Moved 0.22.1 -> 0.35.0 on 2026-10-27, to run `expr/limits` (new in 0.35.0,
+ * 27 rows) from the pinned package -- see the last test in this file. 0.35.0
+ * changed no expr/evaluate or expr/references case; both were re-run here
+ * against 0.35.0 BEFORE the pin moved, unchanged: expr/evaluate 48 (+1
+ * documented skip, 0904), expr/references 12. expr/limits: 27 passed.
  */
-const PINNED_SUITE_VERSION = '0.22.1';
+const PINNED_SUITE_VERSION = '0.35.0';
 
 it('runs against the pinned fixture set, and says which', function (): void {
     echo "\nfancy-conformance installed: ".Conformance::version().', pinned: '.PINNED_SUITE_VERSION."\n";
@@ -136,6 +142,49 @@ it('keeps absence and malformity apart', function (): void {
     // The reason the package exists, as one assertion.
     expect(Expr::evaluate('in.nothing', ['in' => []]))->toBeNull();
     expect(fn () => Expr::evaluate('in.a &&', ['in' => []]))->toThrow(ExprSyntaxError::class);
+});
+
+/**
+ * `expr/limits`: the same evaluate(), with the failure side carrying the
+ * error's stable code. `$errorCode`, because Exception already owns an integer
+ * `$code`. LimitsTest.php keeps the probes this table cannot express.
+ *
+ * @param  array<string,mixed>  $case
+ * @return array<string,mixed>
+ */
+function runExprLimitCase(array $case): array
+{
+    try {
+        $value = Expr::evaluate(
+            $case['input']['expression'],
+            $case['input']['context'] ?? [],
+        );
+    } catch (ExprSyntaxError $e) {
+        return ['ok' => false, 'code' => $e->errorCode];
+    }
+
+    return ['ok' => true, 'value' => $value];
+}
+
+it('matches the expr/limits table on every case', function (): void {
+    $summary = Conformance::runTable('expr/limits', runExprLimitCase(...));
+
+    echo "\n".Conformance::formatSummary($summary)."\n";
+
+    $failures = array_filter(
+        $summary['results'] ?? [],
+        static fn (array $r): bool => ($r['status'] ?? '') === 'fail',
+    );
+
+    expect($failures)->toBe([], 'PHP disagrees with the shared limits on: '.implode(
+        ', ',
+        array_column($failures, 'id'),
+    ));
+
+    expect($summary['failed'])->toBe(0);
+
+    // The vacuity floor.
+    expect($summary['passed'])->toBeGreaterThan(20);
 });
 
 it('holds the sandbox', function (): void {
