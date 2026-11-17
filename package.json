@@ -22,7 +22,8 @@
   "files": [
     "dist",
     "GRAMMAR.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "AGENTS.md"
   ],
   "engines": {
     "node": ">=22"

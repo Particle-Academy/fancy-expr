@@ -1,159 +1,72 @@
-# AGENTS.md — fancy-expr
+# Using fancy-expr — guide for agents
 
-A sandboxed expression evaluator: **one grammar, three implementations**
-(TypeScript, PHP, Python), shipped from one repo the way `fancy-conformance` is.
-`CLAUDE.md` symlinks here.
+How an agent installs and uses this package in a consumer app. What the package
+is, is in [README.md](./README.md). Notes for working ON this repo's code are in
+[CONTRIBUTING.md](./CONTRIBUTING.md).
 
-This file describes **this repo's code**. Process rules — publishing, kit
-versioning, backports — live in the envelope's `AGENTS.md` and are deliberately
-not repeated.
+## Install
 
-## Read GRAMMAR.md first
+| Runtime | Command |
+|---|---|
+| TypeScript | `npm i @particle-academy/fancy-expr` (Node `>=22`) |
+| PHP | `composer require particle-academy/fancy-expr` (PHP `^8.4`) |
+| Python | `pip install fancy-expr` (not on PyPI yet) |
 
-`GRAMMAR.md` is the specification. The implementations follow it; they do not
-follow each other, and none of them is "the reference" in the sense of being
-allowed to define behaviour by accident. A disagreement between an
-implementation and the grammar is a bug in the implementation.
+No runtime dependencies in any of the three.
 
-## Why this exists
+## Find it on the Fancy MCP server
 
-`fancy-flow`'s `{{ … }}` resolved dot-paths only and returned `null` for
-everything else — the same `null` a real-but-absent path returns. The two were
-indistinguishable, so a condition the engine could not evaluate silently read as
-`false`, a graph took the wrong branch on every run, and the run reported
-success. A consumer lost a production workflow to exactly that, and found it only
-by reading the resolver's source.
+The catalog server is `https://ui.particle.academy/mcp` (streamable HTTP, no API
+key; MCP id `fancy-ui`). It is listed as the registry entry `fancy-expr` (a
+package entry, not vendorable source). Find it with `search-backend-packages`
+(stack `php`, `node` or `python`); `install-instructions` with `fancy-expr`
+gives the commands.
 
-So there are two jobs here, and the second matters as much as the first:
+## API essentials
 
-1. Make the shapes people actually write **evaluate**.
-2. Make the ones that cannot **say so**, loudly, and ideally at save time.
+The same three questions in every runtime. TypeScript:
 
-## Why not a library
+```ts
+import { evaluate, parse, references } from "@particle-academy/fancy-expr";
 
-`symfony/expression-language`, `expr-eval` and `simpleeval` are all real, current
-and the standard answer in their language. They also **do not agree with each
-other** on truthiness, equality or coercion. Adopting them would ship three
-subtly different languages under one syntax, and we would own neither side of
-the divergence — which is the failure `fancy-conformance` exists to catch and
-would be powerless to fix. One grammar written three times against a shared
-fixture table is the only version that can be held to a contract.
+evaluate("in.transcript || in.content", { in: { content: "hi" } });  // "hi"
+evaluate("results.length === 0 ? 'none' : 'ok'", { results: [] });   // "none"
 
-## Invariants
-
-**Absence and malformity are DIFFERENT OUTCOMES.** An unresolved path is `null`.
-A malformed expression **throws**. Collapsing them is the original defect; any
-change that lets a parse failure return `null` reintroduces it.
-
-**Parsing is separable from evaluation.** A host must be able to ask "is this
-expression valid?" with no data at all — that is what makes a node with a broken
-expression rejectable at save time rather than discovered mid-run.
-
-**No host reach, in any implementation.** No `eval`, no `exec`, no property
-access on host objects, no method calls, no imports, no assignment. Expressions
-arrive from end users and from agents, over the wire. This is a security
-boundary, not a style preference.
-
-**`[]` and `{}` are TRUTHY**, against PHP's and Python's native instincts. The
-data came from JSON; an array that exists is a value. Testing whether it is empty
-is what `.length` is for, and conflating the two turns "did we get results?" into
-"did the call succeed?".
-
-**`==` and `===` are the same operator.** No loose equality anywhere. Two
-equality operators that differ subtly is a language that generates bug reports,
-and there are three runtimes to keep in step.
-
-## Layout
-
-One repo, three languages, mirroring `fancy-conformance`:
-
-```
-GRAMMAR.md              the specification -- read it first
-src/  tests/            TypeScript
-php/src/  php/tests/    PHP
-python/src/  python/tests/   Python (its own pyproject.toml, published as `fancy-expr`)
-composer.json           AT THE ROOT, psr-4 -> php/src/
-phpunit.xml             AT THE ROOT, testsuite -> php/tests
+parse("in.a &&");            // throws ExprSyntaxError — ask this at SAVE time
+references("{ when: $now }") // ["$now"] — the root names it reads, sorted
 ```
 
-**`composer.json` belongs at the repository root and nowhere else.** Packagist
-reads only the root manifest; one inside `php/` is invisible to it, so the
-package would be unpublishable while looking perfectly organised in the tree.
-This repo had it in `php/` for exactly one afternoon.
+- PHP: static methods on `FancyExpr\Expr` (`Expr::evaluate`, `Expr::parse`,
+  `Expr::references`, `Expr::truthy`); errors are `FancyExpr\ExprSyntaxError`.
+- Python: `from fancy_expr import evaluate, parse, references`; a malformed
+  expression raises `ExprSyntaxError`.
+- TypeScript also exports `evaluateNode`, `truthy`, `ExprSyntaxError`,
+  `MAX_EXPRESSION_BYTES` and `MAX_EXPRESSION_DEPTH`.
+- Supported: paths, literals, logic, comparisons, ternaries, object/array
+  literals, and `.length` as the one pseudo-property. The full specification is
+  [`GRAMMAR.md`](./GRAMMAR.md), which ships in the npm package.
 
-## Testing
+**Cannot fire, cannot save.** Validate at save time with both halves: `parse()`
+rejects bad syntax; `references()` lets the host reject names that will never
+exist:
 
-```bash
-npm test                                   # TypeScript
-php vendor/bin/pest                        # PHP
-cd python && python -m pytest -q           # Python
+```ts
+const unknown = references(expr).filter((r) => !provided.has(r));
+if (unknown.length) throw new Error(`No such value: ${unknown.join(", ")}`);
 ```
 
-The Python suite gets the shared `fancy_conformance` loader from pytest's
-`pythonpath`, which names the `fancy-conformance` checkout beside this
-repository in the envelope; CI checks out the pinned tag and sets `PYTHONPATH`
-to its `python/src`. It is deliberately in no dependency group:
-`fancy-conformance` is never published to PyPI, so a group entry breaks
-`pip install -e . --group dev`.
+## Traps
 
-All three are required CI jobs. A language whose suite does not run is a
-language whose agreement with the other two is a claim rather than a test
-result -- which is the failure the shared table exists to prevent, and
-reproducing it here would be absurd.
-
-**All three run the same PINNED fixture set, and each prints and asserts it.**
-Node pins through `package.json` plus the committed lockfile; PHP through an
-EXACT `require-dev` constraint, because `composer.lock` is not committed and a
-range would resolve the newest Packagist release on the day CI runs (it did:
-PHP read 0.22.0 while Node was locked at 0.18.0, and neither said so); Python
-through `PINNED_SUITE_VERSION` and the tag its CI checks out. A test on each side
-fails if the installed version, the manifests or the Python constant disagree,
-so moving the pin is one deliberate commit that touches all of them, made only
-after re-running both tables in every runtime.
-
-Every semantic rule in `GRAMMAR.md` is a row in the shared corpus, and each
-implementation runs the same rows. Add the row FIRST, then satisfy it in all
-three — the spec-first order, which repeatedly caught real defects in the flow
-runtimes when the table predated the port.
-
-It earned its keep here on the first independent port. The PHP implementation
-was written against the published rows rather than against `src/`, and failed
-**exactly one** of 44 on its first run: `0904`, that an object has no `.length`.
-The row was right and the port was right — PHP simply cannot express the case,
-because `json_decode('{}', true)` and `json_decode('[]', true)` produce the
-identical value and `array_is_list()` calls both a list. Skipped for PHP with
-the reason attached; `0906` pins the same rule with a non-empty object, which
-every language can express.
-
-Discrimination probes are required, not optional: a deliberately-wrong evaluator
-must fail an EXACT set of case ids. A table every plausible implementation passes
-proves nothing. Each language's probes should aim at **that language's own
-instincts** — PHP's are `(bool) []`, `'3' == 3` and `'0'`.
-
-A full mutant harness (deliberately-wrong evaluators failing an exact id set,
-the way `shared/decimal` has) is still owed, and is recorded in the suite's
-manifest so the current green tick is not read as the stronger claim.
-
-## Two exported questions, and the second is newer
-
-`evaluate()` is the obvious one. `references()` is the static one: the ROOT
-names an expression reads, sorted, with no data. It exists so a host can enforce
-"a node that cannot fire correctly can never be saved" for the case `parse()`
-cannot see -- valid syntax reading a name that will never exist.
-
-**The allowlist is the host's and must never move in here.** `$json`, `$input`
-and `$props` are real in one host and meaningless in another; a list in this
-package would be wrong for every consumer but one. Answer what is read, let the
-host decide what exists.
-
-## Status
-
-**All three implementations are written and green** against both
-`expr/evaluate` and `expr/references`.
-
-Still registered in `PackageRegistry::PLANNED`, because "built" is not
-"published". **Nothing is published, and none of the three registry names
-exist** — npm, Packagist and PyPI all need a first
-publish, and each bootstraps differently. Read the envelope's
-`.ai/knowledge/publishing.md` and run `.claude/skills/ship-it/preflight.py`
-before attempting one; do not improvise the sequence.
+- **An unresolved path is `null` (`None` in Python). A malformed expression
+  throws.** Never treat the two as the same outcome.
+- **The allowlist is yours.** The package does not know whether `$now`,
+  `$json`, `$input` or `$props` exist in your host; check `references()` against
+  what you actually provide.
+- **`[]` and `{}` are truthy**, unlike PHP and Python natively. Test emptiness
+  with `.length`.
+- **`==` and `===` are the same operator.** There is no loose equality.
+- `&&` / `||` return the operand, not a boolean.
+- A bool is not a number: `flag === 1` is false and `true + 1` is `null`
+  (Python's `True == 1` instinct does not apply).
+- **Not a programming language.** No user functions, loops, assignment, method
+  calls, host property access or `eval`. A call does not even parse.

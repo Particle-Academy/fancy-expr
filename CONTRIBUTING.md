@@ -1,0 +1,163 @@
+# Contributing to fancy-expr
+
+Notes for anyone, human or agent, working ON this package's code. How to USE the
+package is in [AGENTS.md](./AGENTS.md); what it is, is in [README.md](./README.md).
+`CLAUDE.md` is a symlink to this file, so Claude Code reads these notes when it
+works in this repo.
+
+A sandboxed expression evaluator: **one grammar, three implementations**
+(TypeScript, PHP, Python), shipped from one repo the way `fancy-conformance` is.
+
+This file describes **this repo's code**. Process rules — publishing, kit
+versioning, backports — live in the envelope's `RULES.md` and are deliberately
+not repeated.
+
+## Read GRAMMAR.md first
+
+`GRAMMAR.md` is the specification. The implementations follow it; they do not
+follow each other, and none of them is "the reference" in the sense of being
+allowed to define behaviour by accident. A disagreement between an
+implementation and the grammar is a bug in the implementation.
+
+## Why this exists
+
+`fancy-flow`'s `{{ … }}` resolved dot-paths only and returned `null` for
+everything else — the same `null` a real-but-absent path returns. The two were
+indistinguishable, so a condition the engine could not evaluate silently read as
+`false`, a graph took the wrong branch on every run, and the run reported
+success. A consumer lost a production workflow to exactly that, and found it only
+by reading the resolver's source.
+
+So there are two jobs here, and the second matters as much as the first:
+
+1. Make the shapes people actually write **evaluate**.
+2. Make the ones that cannot **say so**, loudly, and ideally at save time.
+
+## Why not a library
+
+`symfony/expression-language`, `expr-eval` and `simpleeval` are all real, current
+and the standard answer in their language. They also **do not agree with each
+other** on truthiness, equality or coercion. Adopting them would ship three
+subtly different languages under one syntax, and we would own neither side of
+the divergence — which is the failure `fancy-conformance` exists to catch and
+would be powerless to fix. One grammar written three times against a shared
+fixture table is the only version that can be held to a contract.
+
+## Invariants
+
+**Absence and malformity are DIFFERENT OUTCOMES.** An unresolved path is `null`.
+A malformed expression **throws**. Collapsing them is the original defect; any
+change that lets a parse failure return `null` reintroduces it.
+
+**Parsing is separable from evaluation.** A host must be able to ask "is this
+expression valid?" with no data at all — that is what makes a node with a broken
+expression rejectable at save time rather than discovered mid-run.
+
+**No host reach, in any implementation.** No `eval`, no `exec`, no property
+access on host objects, no method calls, no imports, no assignment. Expressions
+arrive from end users and from agents, over the wire. This is a security
+boundary, not a style preference.
+
+**`[]` and `{}` are TRUTHY**, against PHP's and Python's native instincts. The
+data came from JSON; an array that exists is a value. Testing whether it is empty
+is what `.length` is for, and conflating the two turns "did we get results?" into
+"did the call succeed?".
+
+**`==` and `===` are the same operator.** No loose equality anywhere. Two
+equality operators that differ subtly is a language that generates bug reports,
+and there are three runtimes to keep in step.
+
+## Layout
+
+One repo, three languages, mirroring `fancy-conformance`:
+
+```
+GRAMMAR.md              the specification -- read it first
+src/  tests/            TypeScript
+php/src/  php/tests/    PHP
+python/src/  python/tests/   Python (its own pyproject.toml, published as `fancy-expr`)
+composer.json           AT THE ROOT, psr-4 -> php/src/
+phpunit.xml             AT THE ROOT, testsuite -> php/tests
+```
+
+**`composer.json` belongs at the repository root and nowhere else.** Packagist
+reads only the root manifest; one inside `php/` is invisible to it, so the
+package would be unpublishable while looking perfectly organised in the tree.
+This repo had it in `php/` for exactly one afternoon.
+
+## Testing
+
+```bash
+npm test                                   # TypeScript
+php vendor/bin/pest                        # PHP
+cd python && python -m pytest -q           # Python
+```
+
+The Python suite gets the shared `fancy_conformance` loader from pytest's
+`pythonpath`, which names the `fancy-conformance` checkout beside this
+repository in the envelope; CI checks out the pinned tag and sets `PYTHONPATH`
+to its `python/src`. It is deliberately in no dependency group:
+`fancy-conformance` is never published to PyPI, so a group entry breaks
+`pip install -e . --group dev`.
+
+All three are required CI jobs. A language whose suite does not run is a
+language whose agreement with the other two is a claim rather than a test
+result -- which is the failure the shared table exists to prevent, and
+reproducing it here would be absurd.
+
+**All three run the same PINNED fixture set, and each prints and asserts it.**
+Node pins through `package.json` plus the committed lockfile; PHP through an
+EXACT `require-dev` constraint, because `composer.lock` is not committed and a
+range would resolve the newest Packagist release on the day CI runs (it did:
+PHP read 0.22.0 while Node was locked at 0.18.0, and neither said so); Python
+through `PINNED_SUITE_VERSION` and the tag its CI checks out. A test on each side
+fails if the installed version, the manifests or the Python constant disagree,
+so moving the pin is one deliberate commit that touches all of them, made only
+after re-running both tables in every runtime.
+
+Every semantic rule in `GRAMMAR.md` is a row in the shared corpus, and each
+implementation runs the same rows. Add the row FIRST, then satisfy it in all
+three — the spec-first order, which repeatedly caught real defects in the flow
+runtimes when the table predated the port.
+
+It earned its keep here on the first independent port. The PHP implementation
+was written against the published rows rather than against `src/`, and failed
+**exactly one** of 44 on its first run: `0904`, that an object has no `.length`.
+The row was right and the port was right — PHP simply cannot express the case,
+because `json_decode('{}', true)` and `json_decode('[]', true)` produce the
+identical value and `array_is_list()` calls both a list. Skipped for PHP with
+the reason attached; `0906` pins the same rule with a non-empty object, which
+every language can express.
+
+Discrimination probes are required, not optional: a deliberately-wrong evaluator
+must fail an EXACT set of case ids. A table every plausible implementation passes
+proves nothing. Each language's probes should aim at **that language's own
+instincts** — PHP's are `(bool) []`, `'3' == 3` and `'0'`.
+
+A full mutant harness (deliberately-wrong evaluators failing an exact id set,
+the way `shared/decimal` has) is still owed, and is recorded in the suite's
+manifest so the current green tick is not read as the stronger claim.
+
+## Two exported questions, and the second is newer
+
+`evaluate()` is the obvious one. `references()` is the static one: the ROOT
+names an expression reads, sorted, with no data. It exists so a host can enforce
+"a node that cannot fire correctly can never be saved" for the case `parse()`
+cannot see -- valid syntax reading a name that will never exist.
+
+**The allowlist is the host's and must never move in here.** `$json`, `$input`
+and `$props` are real in one host and meaningless in another; a list in this
+package would be wrong for every consumer but one. Answer what is read, let the
+host decide what exists.
+
+## Status
+
+**All three implementations are written and green** against both
+`expr/evaluate` and `expr/references`.
+
+Published on npm (`@particle-academy/fancy-expr`, 0.2.0) and Packagist
+(`particle-academy/fancy-expr`); **PyPI (`fancy-expr`) is not published yet**
+(checked 2026-11-16: PyPI returns 404 for the name). The Python first publish
+bootstraps differently from the other two. Read the envelope's
+`.ai/knowledge/publishing.md` and run `.claude/skills/ship-it/preflight.py`
+before attempting one; do not improvise the sequence.
